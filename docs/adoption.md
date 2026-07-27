@@ -113,8 +113,11 @@ deterministic.
 ## 4. Version convergence (`versionSync`)
 
 `sync` and `check` reconcile a fixed version allow-list against the active profile
-baseline: `engines.*`, `packageManager`, a small set of `devDependencies` and
-`scripts.postinstall`. Everything else in `package.json` (`vue`, `tailwindcss`,
+baseline: `engines.*`, `packageManager`, a small set of `devDependencies`, and any
+`scripts.*` the baseline declares (e.g. `postinstall`, `lint`). A baseline-declared
+script is a plain **overwrite**: unlike a version pin it has no forward floor (a
+script is not a semver), so it replaces whatever the repo has — opt out per-key with
+`versionSyncExclude`. Everything the baseline does not list (`vue`, `tailwindcss`,
 app deps, your own scripts) is project-owned and never touched.
 
 Disable globally or per-key in `.streamctl/config.ts`:

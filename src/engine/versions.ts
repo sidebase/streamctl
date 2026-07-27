@@ -283,7 +283,7 @@ export async function applyReconcile(cwd: string, raw: string, edits: JsoncEdit[
 
 /**
  * Compute (and optionally apply) the reconciliation of `package.json`'s version allow-list +
- * `scripts.postinstall` to the active profile baseline. Thin wrapper over {@link planReconcile} +
+ * baseline `scripts.*` to the active profile baseline. Thin wrapper over {@link planReconcile} +
  * {@link applyReconcile}; `runSync` calls those two directly so the compute (which can throw) runs in
  * its plan pass, before any managed write.
  */

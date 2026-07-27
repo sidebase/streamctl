@@ -301,13 +301,13 @@ describe("v2 load-time failures", () => {
     expect(error.message).toContain("no preset in the chain declares");
   });
 
-  it("scripts.build is not a reconcilable version key", async () => {
+  it("browserslist is not a reconcilable version key", async () => {
     const payload = payloadOf({
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": {
         name: "base",
         files: [{ path: ".x", strategy: "full", source: "x" }],
-        versionProfiles: { n4: { "scripts.build": "tsc" } },
+        versionProfiles: { n4: { browserslist: "> 1%" } },
       },
     });
     const error = await caught(resolvePresetChain(payload, "base", "n4"));

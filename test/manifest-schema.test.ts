@@ -150,12 +150,16 @@ describe("RenderDef", () => {
 
 describe("PresetManifest", () => {
   it("rejects a versionProfiles key outside the reconcile safety pattern", () => {
-    const paths = issuePaths({ ...preset(), versionProfiles: { n4: { "scripts.build": "tsc" } } }, presetManifestSchema);
+    const paths = issuePaths({ ...preset(), versionProfiles: { n4: { browserslist: "> 1%" } } }, presetManifestSchema);
     expect(paths.some(p => p.startsWith("versionProfiles"))).toBe(true);
   });
 
   it("accepts reconcilable versionProfiles keys", () => {
     expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { n4: { "devDependencies.typescript": "^6.0.0" } } }).success).toBe(true);
+  });
+
+  it("accepts any scripts.<name>, not just scripts.postinstall", () => {
+    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { n4: { "scripts.lint": "oxlint . && eslint ." } } }).success).toBe(true);
   });
 
   it("covers all four dependency sections", () => {

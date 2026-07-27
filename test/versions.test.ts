@@ -118,16 +118,31 @@ describe("reconcileVersions", () => {
 
   it("rejects a versionSyncExclude key the reconciler could never touch", async () => {
     await writePkg(PKG);
-    // Only `scripts.postinstall` is reconcilable, so `scripts.build` is shape-invalid.
+    // `browserslist` has no reconcilable prefix (not engines.*/packageManager/*Dependencies.*/scripts.*).
     const error = await reconcileVersions({
       cwd,
-      config: { ...config, versionSyncExclude: ["scripts.build"] },
+      config: { ...config, versionSyncExclude: ["browserslist"] },
       baseline: BASELINE,
       hasEslintConfig: true,
       apply: false,
     }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StreamctlError);
     expect((error as StreamctlError).code).toBe("CONFIG_INVALID");
+  });
+
+  it("reconciles any scripts.<name>, overwriting an existing script (no version floor)", async () => {
+    // A script is not a semver, so the forward-aware floor cannot protect it: the
+    // baseline value replaces whatever the repo has.
+    await writePkg(JSON.stringify({ name: "app", scripts: { lint: "eslint ." } }, null, 2));
+    const { changes } = await reconcileVersions({
+      cwd,
+      config,
+      baseline: { "scripts.lint": "oxlint . && eslint ." },
+      hasEslintConfig: false,
+      apply: true,
+    });
+    expect(changes).toContainEqual({ key: "scripts.lint", from: "eslint .", to: "oxlint . && eslint ." });
+    expect((await readPkg()).scripts).toEqual({ lint: "oxlint . && eslint ." });
   });
 
   it("rejects a non-string dep value with CONFIG_INVALID naming the key", async () => {

@@ -115,7 +115,7 @@ export const presetManifestSchema = z.strictObject({
         ctx.addIssue({
           code: "custom",
           path: ["versionProfiles", profile, key],
-          message: `"${key}" must be a reconcilable version key (engines.*, packageManager, dependencies.<name>, (dev|peer|optional)Dependencies.<name>, scripts.postinstall)`,
+          message: `"${key}" must be a reconcilable version key (engines.*, packageManager, dependencies.<name>, (dev|peer|optional)Dependencies.<name>, scripts.<name>)`,
         });
       }
     }

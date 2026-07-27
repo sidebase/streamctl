@@ -19,7 +19,7 @@ export type SyncStrategy = "full" | "block" | "merge" | "scaffold";
  * keys never match.
  */
 export const RECONCILABLE_KEY_PATTERN
-  = /^(?:engines\.[a-zA-Z]+|packageManager|(?:(?:dev|peer|optional)Dependencies|dependencies)\..+|scripts\.postinstall)$/;
+  = /^(?:engines\.[a-zA-Z]+|packageManager|(?:(?:dev|peer|optional)Dependencies|dependencies)\..+|scripts\..+)$/;
 
 export interface ManagedFile {
   path: string;
