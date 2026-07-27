@@ -1,0 +1,22 @@
+{
+  "name": "base",
+  "files": [
+    { "path": ".editorconfig", "strategy": "full", "source": "base/editorconfig", "adoption": "expected" },
+    { "path": ".acmerc", "strategy": "block", "source": "base/acmerc", "blockMark": "core" },
+    { "path": ".vscode/settings.json", "strategy": "merge", "source": "base/vscode/settings.json", "projectFields": ["editor.fontSize", "files.exclude"] },
+    { "path": "AGENTS.md", "strategy": "full", "source": "base/AGENTS.md", "adoption": "expected" },
+    { "path": "NOTES.md", "strategy": "scaffold", "source": "base/NOTES.md", "adoption": "expected" },
+    { "path": ".github/workflows/acme-upgrade.yml", "strategy": "full", "source": "base/github/workflows/acme-upgrade.yml", "render": "upgrade", "enabledBy": "ci.upgradeWorkflow", "adoption": "unexpected" }
+  ],
+  "renders": {
+    "upgrade": {
+      "placeholders": {
+        "NODE_VERSION": { "configPath": "ci.nodeVersion", "default": "20.9.0", "pattern": "^[\\w.+-]+$" }
+      }
+    }
+  },
+  "configKeys": {
+    "ci.upgradeWorkflow": "boolean",
+    "ci.nodeVersion": "string"
+  }
+}

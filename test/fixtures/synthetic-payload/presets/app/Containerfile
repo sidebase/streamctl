@@ -1,0 +1,13 @@
+FROM docker.io/library/node:20-slim
+
+ARG APT_PACKAGES="${APT_PACKAGES}"
+RUN if [ -n "$APT_PACKAGES" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends $APT_PACKAGES && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# Build-time ARG owned by the template (declared passthrough), not a streamctl knob.
+ARG BUILD_TOKEN
+RUN echo "build token: ${BUILD_TOKEN}"
+
+COPY . /app
+WORKDIR /app

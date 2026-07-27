@@ -1,0 +1,31 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`check --json on an uninitialized repo > emits a well-formed JSON error envelope and a non-zero exit 1`] = `
+{
+  "command": "check",
+  "error": {
+    "code": "NOT_INITIALIZED",
+    "message": "No .streamctl/config.ts found in this repo. Run \`streamctl init\` first.",
+  },
+  "exitCode": 1,
+  "ok": false,
+}
+`;
+
+exports[`sync --help > lists every documented flag 1`] = `
+"Compose preset + project deltas, detect drift, write managed files (sync)
+
+USAGE sync [OPTIONS] 
+
+OPTIONS
+
+      --interactive    Per-file accept/skip prompts                                                                      
+          --dry-run    Compute and report; write nothing                                                                 
+      --only=<glob>    Glob: limit to matching files                                                                     
+     --version-sync    Reconcile the version allow-list (Default: true)                                                  
+  --no-version-sync                                                                                                      
+              --yes    Accept creates + safe reconciles without prompting (conflicts still need --interactive or --force)
+            --force    Accept all overwrites without prompting                                                           
+             --json    Output a machine-readable JSON envelope                                                           
+"
+`;

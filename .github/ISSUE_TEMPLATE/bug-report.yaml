@@ -1,0 +1,63 @@
+name: 🐞 Bug report
+description: Create a bug report for streamctl
+labels: [bug, pending]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug!
+
+        Before opening an issue, please search existing issues and check whether the bug
+        is already fixed in a newer version or on the `main` branch.
+
+        streamctl works entirely on local files, so most bugs can be reported without a
+        reproduction repo — the JSON outputs below usually contain everything we need.
+  - type: textarea
+    id: bug-env
+    attributes:
+      label: Environment
+      description: OS, `node -v`, your package manager + version, and `pnpm streamctl --version`
+      placeholder: |
+        OS: macOS 15.5
+        node: v24.13.0
+        pnpm: 10.29.1
+        streamctl: 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: bug-command
+    attributes:
+      label: Command and output
+      description: The exact command you ran and its full output. Please re-run with `--json` if the command supports it.
+      render: shell-script
+    validations:
+      required: true
+  - type: textarea
+    id: bug-status
+    attributes:
+      label: "`streamctl status --json` output"
+      description: Paste the output of `pnpm streamctl status --json`
+      render: shell-script
+    validations:
+      required: true
+  - type: textarea
+    id: bug-payload
+    attributes:
+      label: Payload
+      description: The payload package name and the pinned `version` from `.streamctl/config.ts` (plus any relevant config knobs)
+      placeholder: "@your-org/config @ 1.2.3"
+    validations:
+      required: true
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is — what you expected vs what happened. If you intend to submit a PR for this issue, tell us in the description. Thanks!
+      placeholder: Bug description
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: If applicable, add any other context about the problem here

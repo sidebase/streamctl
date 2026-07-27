@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "presets": ["base", "app"],
+  "profiles": [
+    { "name": "std", "detect": { "dependency": "acme-runtime", "majorIs": 2 } },
+    { "name": "min" }
+  ],
+  "defaultBase": "app"
+}

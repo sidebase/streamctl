@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/sidebase/streamctl/blob/main/docs/reference.md
+    about: Exit codes, contracts, conflict kinds, the upgrade transaction, and known caveats.
+  - name: 💬 Discord
+    url: https://discord.gg/NDDgQkcv3s
+    about: Ask questions and get in contact with us directly!
+  - name: ⭐ Other projects
+    url: https://sidebase.io
+    about: Supercharge your Nuxt application with more of our projects!

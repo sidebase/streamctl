@@ -1,0 +1,21 @@
+# Dependabot config: keeps the SHA-pinned GitHub Actions fresh and the
+# npm deps current. Dependabot understands the `uses:` SHA pins + version
+# comments and PRs the next SHA with an updated comment.
+version: 2
+updates:
+  # SHA-pinned actions in .github/workflows rot silently without this.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # npm entry included: this is a small single-package repo, so grouping every
+  # update into one weekly PR keeps the noise low while deps stay current.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"

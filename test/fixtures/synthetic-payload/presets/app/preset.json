@@ -1,0 +1,42 @@
+{
+  "name": "app",
+  "extends": ["base"],
+  "files": [
+    { "path": "acme.config.ts", "strategy": "scaffold", "source": "app/acme.config.ts", "shadowedBy": ["acme.config.mjs", "acme.config.js"] },
+    { "path": "Containerfile", "strategy": "full", "source": "app/Containerfile", "render": "container", "adoption": "expected" },
+    { "path": ".github/workflows/pipeline.yml", "strategy": "full", "source": "app/github/workflows/pipeline.yml", "render": "pipeline" }
+  ],
+  "renders": {
+    "container": {
+      "placeholders": {
+        "APT_PACKAGES": { "configPath": "aptPackages", "default": "", "pattern": "^$|^[a-z0-9][a-z0-9 +.-]*$", "join": "space" }
+      },
+      "passthrough": ["BUILD_TOKEN"]
+    },
+    "pipeline": {
+      "placeholders": {
+        "NODE_VERSION": { "configPath": "ci.nodeVersion", "default": "20.9.0", "pattern": "^[\\w.+-]+$" }
+      },
+      "fragments": [
+        { "toggle": "ci.lint", "source": "app/fragments/lint-job.yml" },
+        { "toggle": "ci.smoke", "source": "app/fragments/smoke-job.yml" }
+      ]
+    }
+  },
+  "configKeys": {
+    "aptPackages": "string[]",
+    "ci.nodeVersion": "string",
+    "ci.lint": "boolean",
+    "ci.smoke": "boolean"
+  },
+  "versionProfiles": {
+    "std": {
+      "engines.node": ">=20.9.0",
+      "devDependencies.acme-runtime": "^2.4.0",
+      "devDependencies.typescript": "^5.6.0",
+      "devDependencies.vitest": "^3.0.0",
+      "scripts.postinstall": "acme prepare"
+    },
+    "min": {}
+  }
+}

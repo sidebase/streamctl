@@ -1,0 +1,47 @@
+name: "🚀 Enhancement"
+description: Suggest an enhancement that will improve streamctl
+labels: ["pending", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to fill out this feature request!
+
+        Please note: Only post enhancements that you have properly considered. This means:
+        - You have properly determined what problem your enhancement fixes
+        - How you would recommend implementing your enhancement
+        - How this change would impact streamctl (exit codes, the `check`/`sync` contract, payload compatibility)
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Describe the feature
+      description: A clear and concise description of what you think would be a helpful addition to streamctl, including the possible use cases and alternatives you have considered.
+      placeholder: Feature description
+    validations:
+      required: true
+  - type: textarea
+    id: feature-implementation
+    attributes:
+      label: How would you implement this?
+      description: For this, please outline how this feature would work. This could be in the form of a textual description, or a walkthrough of what would be adjusted inside the code.
+      placeholder: Implementation sketch
+  - type: checkboxes
+    id: additional-info
+    attributes:
+      label: Additional information
+      description: Additional information that helps us decide how to proceed.
+      options:
+        - label: Would you be willing to help implement this feature?
+  - type: checkboxes
+    id: area-selection
+    attributes:
+      label: Area
+      description: Please check the areas this enhancement targets.
+      options:
+        - label: "`init`"
+        - label: "`sync`"
+        - label: "`check`"
+        - label: "`status`"
+        - label: "`upgrade`"
+        - label: Composition engine (strategies, conflicts, drift)
+        - label: Documentation

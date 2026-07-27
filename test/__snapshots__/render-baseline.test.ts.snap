@@ -1,0 +1,450 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`render baseline: app preset > .github/workflows/pipeline.yml > aptPackages 1`] = `
+"name: pipeline
+on:
+  pull_request:
+env:
+  NODE_VERSION: "20.9.0"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme build
+"
+`;
+
+exports[`render baseline: app preset > .github/workflows/pipeline.yml > ci.all-jobs 1`] = `
+"name: pipeline
+on:
+  pull_request:
+env:
+  NODE_VERSION: "20.9.0"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme build
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme lint
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+    steps:
+      - uses: actions/checkout@v4
+      - run: acme smoke
+"
+`;
+
+exports[`render baseline: app preset > .github/workflows/pipeline.yml > ci.custom-node 1`] = `
+"name: pipeline
+on:
+  pull_request:
+env:
+  NODE_VERSION: "22.20.0"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme build
+"
+`;
+
+exports[`render baseline: app preset > .github/workflows/pipeline.yml > ci.lint 1`] = `
+"name: pipeline
+on:
+  pull_request:
+env:
+  NODE_VERSION: "20.9.0"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme build
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme lint
+"
+`;
+
+exports[`render baseline: app preset > .github/workflows/pipeline.yml > ci.smoke 1`] = `
+"name: pipeline
+on:
+  pull_request:
+env:
+  NODE_VERSION: "20.9.0"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme build
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+    steps:
+      - uses: actions/checkout@v4
+      - run: acme smoke
+"
+`;
+
+exports[`render baseline: app preset > .github/workflows/pipeline.yml > defaults 1`] = `
+"name: pipeline
+on:
+  pull_request:
+env:
+  NODE_VERSION: "20.9.0"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme build
+"
+`;
+
+exports[`render baseline: app preset > .github/workflows/pipeline.yml > files-off 1`] = `
+"name: pipeline
+on:
+  pull_request:
+env:
+  NODE_VERSION: "20.9.0"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: \${{ env.NODE_VERSION }}
+      - run: acme build
+"
+`;
+
+exports[`render baseline: app preset > Containerfile > aptPackages 1`] = `
+"FROM docker.io/library/node:20-slim
+
+ARG APT_PACKAGES="curl openssl"
+RUN if [ -n "$APT_PACKAGES" ]; then \\
+      apt-get update && apt-get install -y --no-install-recommends $APT_PACKAGES && rm -rf /var/lib/apt/lists/*; \\
+    fi
+
+# Build-time ARG owned by the template (declared passthrough), not a streamctl knob.
+ARG BUILD_TOKEN
+RUN echo "build token: \${BUILD_TOKEN}"
+
+COPY . /app
+WORKDIR /app
+"
+`;
+
+exports[`render baseline: app preset > Containerfile > ci.all-jobs 1`] = `
+"FROM docker.io/library/node:20-slim
+
+ARG APT_PACKAGES=""
+RUN if [ -n "$APT_PACKAGES" ]; then \\
+      apt-get update && apt-get install -y --no-install-recommends $APT_PACKAGES && rm -rf /var/lib/apt/lists/*; \\
+    fi
+
+# Build-time ARG owned by the template (declared passthrough), not a streamctl knob.
+ARG BUILD_TOKEN
+RUN echo "build token: \${BUILD_TOKEN}"
+
+COPY . /app
+WORKDIR /app
+"
+`;
+
+exports[`render baseline: app preset > Containerfile > ci.custom-node 1`] = `
+"FROM docker.io/library/node:20-slim
+
+ARG APT_PACKAGES=""
+RUN if [ -n "$APT_PACKAGES" ]; then \\
+      apt-get update && apt-get install -y --no-install-recommends $APT_PACKAGES && rm -rf /var/lib/apt/lists/*; \\
+    fi
+
+# Build-time ARG owned by the template (declared passthrough), not a streamctl knob.
+ARG BUILD_TOKEN
+RUN echo "build token: \${BUILD_TOKEN}"
+
+COPY . /app
+WORKDIR /app
+"
+`;
+
+exports[`render baseline: app preset > Containerfile > ci.lint 1`] = `
+"FROM docker.io/library/node:20-slim
+
+ARG APT_PACKAGES=""
+RUN if [ -n "$APT_PACKAGES" ]; then \\
+      apt-get update && apt-get install -y --no-install-recommends $APT_PACKAGES && rm -rf /var/lib/apt/lists/*; \\
+    fi
+
+# Build-time ARG owned by the template (declared passthrough), not a streamctl knob.
+ARG BUILD_TOKEN
+RUN echo "build token: \${BUILD_TOKEN}"
+
+COPY . /app
+WORKDIR /app
+"
+`;
+
+exports[`render baseline: app preset > Containerfile > ci.smoke 1`] = `
+"FROM docker.io/library/node:20-slim
+
+ARG APT_PACKAGES=""
+RUN if [ -n "$APT_PACKAGES" ]; then \\
+      apt-get update && apt-get install -y --no-install-recommends $APT_PACKAGES && rm -rf /var/lib/apt/lists/*; \\
+    fi
+
+# Build-time ARG owned by the template (declared passthrough), not a streamctl knob.
+ARG BUILD_TOKEN
+RUN echo "build token: \${BUILD_TOKEN}"
+
+COPY . /app
+WORKDIR /app
+"
+`;
+
+exports[`render baseline: app preset > Containerfile > defaults 1`] = `
+"FROM docker.io/library/node:20-slim
+
+ARG APT_PACKAGES=""
+RUN if [ -n "$APT_PACKAGES" ]; then \\
+      apt-get update && apt-get install -y --no-install-recommends $APT_PACKAGES && rm -rf /var/lib/apt/lists/*; \\
+    fi
+
+# Build-time ARG owned by the template (declared passthrough), not a streamctl knob.
+ARG BUILD_TOKEN
+RUN echo "build token: \${BUILD_TOKEN}"
+
+COPY . /app
+WORKDIR /app
+"
+`;
+
+exports[`render baseline: app preset > Containerfile > files-off 1`] = `
+"FROM docker.io/library/node:20-slim
+
+ARG APT_PACKAGES=""
+RUN if [ -n "$APT_PACKAGES" ]; then \\
+      apt-get update && apt-get install -y --no-install-recommends $APT_PACKAGES && rm -rf /var/lib/apt/lists/*; \\
+    fi
+
+# Build-time ARG owned by the template (declared passthrough), not a streamctl knob.
+ARG BUILD_TOKEN
+RUN echo "build token: \${BUILD_TOKEN}"
+
+COPY . /app
+WORKDIR /app
+"
+`;
+
+exports[`render baseline: app preset > acme.config.ts 1`] = `
+"import { defineAcmeConfig } from '@acme/payload/config'
+
+// Scaffolded by streamctl. Project-owned from here.
+export default defineAcmeConfig({
+  // project overrides go here
+})
+"
+`;
+
+exports[`render baseline: base preset > .acmerc 1`] = `
+"# BEGIN streamctl MANAGED BLOCK core
+telemetry=off
+color=always
+# END streamctl MANAGED BLOCK core
+"
+`;
+
+exports[`render baseline: base preset > .editorconfig 1`] = `
+"root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+"
+`;
+
+exports[`render baseline: base preset > .github/workflows/acme-upgrade.yml > aptPackages 1`] = `
+"name: acme upgrade
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.9.0"
+      - run: acme upgrade --yes
+"
+`;
+
+exports[`render baseline: base preset > .github/workflows/acme-upgrade.yml > ci.all-jobs 1`] = `
+"name: acme upgrade
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.9.0"
+      - run: acme upgrade --yes
+"
+`;
+
+exports[`render baseline: base preset > .github/workflows/acme-upgrade.yml > ci.custom-node 1`] = `
+"name: acme upgrade
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+      - run: acme upgrade --yes
+"
+`;
+
+exports[`render baseline: base preset > .github/workflows/acme-upgrade.yml > ci.lint 1`] = `
+"name: acme upgrade
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.9.0"
+      - run: acme upgrade --yes
+"
+`;
+
+exports[`render baseline: base preset > .github/workflows/acme-upgrade.yml > ci.smoke 1`] = `
+"name: acme upgrade
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.9.0"
+      - run: acme upgrade --yes
+"
+`;
+
+exports[`render baseline: base preset > .github/workflows/acme-upgrade.yml > defaults 1`] = `
+"name: acme upgrade
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.9.0"
+      - run: acme upgrade --yes
+"
+`;
+
+exports[`render baseline: base preset > .github/workflows/acme-upgrade.yml > files-off 1`] = `
+"name: acme upgrade
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.9.0"
+      - run: acme upgrade --yes
+"
+`;
+
+exports[`render baseline: base preset > .vscode/settings.json 1`] = `
+"{
+  "editor.formatOnSave": true,
+  "editor.tabSize": 2,
+  "files.trimTrailingWhitespace": true
+}
+"
+`;
+
+exports[`render baseline: base preset > AGENTS.md 1`] = `
+"# Agent instructions
+
+Shared agent guidance for @acme apps. Managed by the payload, so edit upstream.
+"
+`;
+
+exports[`render baseline: base preset > NOTES.md 1`] = `
+"# Project notes
+
+Scaffolded once by streamctl. Project-owned from here on; edit freely.
+"
+`;

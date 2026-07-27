@@ -1,0 +1,88 @@
+{
+  "name": "@sidebase/streamctl",
+  "version": "0.1.0",
+  "description": "Sync a versioned configuration payload into your repo (CI workflows, editor settings, lint wrappers) with conflict blocking and drift detection",
+  "keywords": [
+    "cli",
+    "config-sync",
+    "drift-detection",
+    "scaffolding",
+    "ci",
+    "sidebase"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "homepage": "https://github.com/sidebase/streamctl#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sidebase/streamctl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sidebase/streamctl/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "streamctl": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./manifest": {
+      "types": "./dist/manifest/index.d.ts",
+      "import": "./dist/manifest/index.mjs"
+    }
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "packageManager": "pnpm@10.29.1",
+  "scripts": {
+    "build": "unbuild",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "e2e:dry-run": "pnpm build && node scripts/e2e-dry-run.mjs",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "c12": "^3.0.0",
+    "citty": "^0.2.2",
+    "defu": "^6.1.4",
+    "diff": "^9.0.0",
+    "jsonc-parser": "^3.3.1",
+    "nypm": "^0.6.2",
+    "semver": "^7.8.5",
+    "write-file-atomic": "^8.0.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.1.0",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@types/node": "^26.0.0",
+    "@types/semver": "^7.7.1",
+    "@typescript-eslint/parser": "^8.64.0",
+    "eslint": "^10.7.0",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "jiti": "^2.7.0",
+    "publint": "^0.3.21",
+    "typescript": "^6.0.0",
+    "unbuild": "^3.5.0",
+    "vitest": "^4.1.10"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver"
+    ]
+  }
+}
