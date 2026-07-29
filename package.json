@@ -76,7 +76,7 @@
     "jiti": "^2.7.0",
     "publint": "^0.3.22",
     "typescript": "^6.0.0",
-    "unbuild": "^3.5.0",
+    "unbuild": "^3.6.1",
     "vitest": "^4.1.10"
   },
   "pnpm": {
