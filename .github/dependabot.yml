@@ -19,3 +19,10 @@ updates:
       npm-dependencies:
         patterns:
           - "*"
+    # TS 7.0 shipped without a JS compiler API (due in 7.1), so typescript-eslint
+    # and rollup-plugin-dts (via unbuild) both fail on it. Since every npm update
+    # is one group, the TS major would block the rest. Drop this once both support it.
+    # https://github.com/typescript-eslint/typescript-eslint/issues/12518
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
