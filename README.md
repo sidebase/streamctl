@@ -119,8 +119,8 @@ The read-only CI gate. It recomputes the expected content, diffs it against the 
 | `--json` | boolean | Emit a machine-readable JSON envelope |
 
 - `drift` (default): exit `3` on file drift, version skew, or a structural fault. Offline, no registry probe.
-- `outdated`: exit `4` when a newer payload version is published.
-- `any`: both gates; file drift (exit `3`) takes precedence over outdated.
+- `outdated`: exit `4` when a newer payload version is published. Probes the registry (see [CI setup](#ci-setup)).
+- `any`: both gates; file drift (exit `3`) takes precedence over outdated. Probes the registry.
 
 ```bash
 pnpm streamctl check                 # CI gate (exit 3 on drift)
@@ -224,7 +224,9 @@ Add the gate to your pipeline; exit `3` means the tree drifted from the payload:
 - run: pnpm streamctl check
 ```
 
-To also fail when a newer payload is published, use `pnpm streamctl check --fail-on any` (exit `4`).
+To also fail when a newer payload is published, use `pnpm streamctl check --fail-on any` (exit `4`). Note that this is the one thing `check` does that is not offline: to know whether a newer version exists it has to ask the registry, which it does by running your package manager's `view` for the payload package (falling back to `npm view`). So the job needs registry auth, the same credentials `pnpm install` uses — for a payload on GitHub Packages that means a token with `read:packages`, or you get [`REGISTRY_AUTH_FAILED`](#troubleshooting).
+
+The probe degrades quietly. If the registry cannot be reached, `check` skips the outdated verdict rather than failing the build, and still gates on drift (exit `3`).
 
 ## Troubleshooting
 
