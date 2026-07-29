@@ -20,7 +20,7 @@ const BASELINE: Record<string, string> = {
   "scripts.postinstall": "nuxt prepare",
 };
 
-const config: StreamctlConfig = { package: "@acme/payload", base: "nuxt-app", version: "1.0.0", profile: "n4" };
+const config: StreamctlConfig = { package: "@acme/payload", base: "nuxt-app", version: "1.0.0", profile: "nuxt-4" };
 
 const PKG = JSON.stringify(
   {
@@ -191,7 +191,7 @@ describe("reconcileVersions", () => {
 
   it("warns but accepts an exclude key the active baseline does not define", async () => {
     await writePkg(PKG);
-    // The `base` preset and the `n3` profile ship an empty baseline, so a real
+    // The `base` preset and the `nuxt-3` profile ship an empty baseline, so a real
     // allow-list key has nothing to reconcile there. Excluding it has to stay a
     // no-op rather than a throw. It is still usually a typo, hence the warning.
     const warn = vi.fn();
@@ -724,7 +724,7 @@ describe("runCheck outdated gate", () => {
 
   it("throws OUTDATED with exit 4 when failOn covers it", async () => {
     await writeFile(join(cwd, ".editorconfig"), "root = true\n");
-    const error = await runCheck(cwd, payload, { package: "@acme/payload", base: "base", version: "1.0.0", profile: "n4" }, "outdated", {
+    const error = await runCheck(cwd, payload, { package: "@acme/payload", base: "base", version: "1.0.0", profile: "nuxt-4" }, "outdated", {
       latestProbe: async () => "2.0.0",
     }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StreamctlError);

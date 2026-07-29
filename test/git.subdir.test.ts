@@ -14,7 +14,7 @@ import { exitCodeFor } from "../src/exit-codes";
 
 const execFileAsync = promisify(execFile);
 
-const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "n4" };
+const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "nuxt-4" };
 
 const payload: PayloadHandle = {
   version: "1.0.0",

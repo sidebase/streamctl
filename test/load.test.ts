@@ -11,7 +11,7 @@ describe("loadStreamctlConfig", () => {
     const config = await loadStreamctlConfig(join(fixtures, "valid"));
     expect(config.base).toBe("nuxt-app");
     expect(config.version).toBe("1.2.3");
-    expect(config.profile).toBe("n4");
+    expect(config.profile).toBe("nuxt-4");
     expect(config.versionSyncExclude).toEqual(["devDependencies.typescript"]);
   });
 

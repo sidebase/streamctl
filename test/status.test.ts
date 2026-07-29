@@ -27,7 +27,7 @@ const SOURCES: Record<string, string> = {
       { path: "tsconfig.json", strategy: "full", source: "base/tsconfig" },
       { path: ".prettierrc", strategy: "full", source: "base/prettier" },
     ],
-    versionProfiles: { n4: { "engines.node": ">=24.13.0" } },
+    versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0" } },
     configKeys: { "ci.unitTests": "boolean" },
   }),
   "base/editorconfig": "root = true\n",
@@ -58,7 +58,7 @@ const config: StreamctlConfig = {
   package: "@acme/payload",
   base: "base",
   version: "1.0.0",
-  profile: "n4",
+  profile: "nuxt-4",
   files: { ".prettierrc": "off" },
 };
 
@@ -111,7 +111,7 @@ describe("runStatus state matrix", () => {
   it("carries the package summary", async () => {
     const result = await runStatus(cwd, payload, config, { cliVersion: "9.9.9" });
     expect(result.payload).toEqual({ package: "@acme/payload", pinned: "1.0.0", installed: "1.0.0" });
-    expect(result.profile).toBe("n4");
+    expect(result.profile).toBe("nuxt-4");
     expect(result.cliVersion).toBe("9.9.9");
     expect(result.files.every(f => ["full", "block", "scaffold", "merge"].includes(f.strategy))).toBe(true);
   });

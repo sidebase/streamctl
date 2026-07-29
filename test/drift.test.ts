@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { detectDrift } from "../src/engine/drift";
 
-const config: StreamctlConfig = { package: "@acme/payload", base: "nuxt-app", version: "1.0.0", profile: "n4" };
+const config: StreamctlConfig = { package: "@acme/payload", base: "nuxt-app", version: "1.0.0", profile: "nuxt-4" };
 
 const payload: PayloadHandle = {
   version: "1.0.0",

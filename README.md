@@ -203,7 +203,7 @@ export default defineConfig({
   package: "@your-org/config", // the payload package this repo syncs from
   base: "nuxt-app",        // preset to derive from (validated against the payload's presets)
   version: "0.1.0",        // pinned payload version (bumped by `upgrade`)
-  profile: "n4",           // version-allow-list profile ("n4"; "n3" reserved)
+  profile: "nuxt-4",       // version-allow-list profile declared by the payload's manifest
   // versionSync: true,           // master opt-out for package.json reconcile
   // versionSyncExclude: [],      // specific allow-list keys to skip
   // aptPackages: ["openssl"],    // injected into the Dockerfile APT_PACKAGES arg

@@ -19,8 +19,8 @@ const TEMPLATES: Record<string, string> = {
     schemaVersion: 2,
     presets: ["base", "nuxt-app"],
     profiles: [
-      { name: "n4", detect: { dependency: "nuxt", majorIs: 4 } },
-      { name: "n3", detect: { dependency: "nuxt", majorIs: 3 } },
+      { name: "nuxt-4", detect: { dependency: "nuxt", majorIs: 4 } },
+      { name: "nuxt-3", detect: { dependency: "nuxt", majorIs: 3 } },
     ],
     defaultBase: "nuxt-app",
   }),
@@ -41,8 +41,8 @@ const TEMPLATES: Record<string, string> = {
       { path: "prisma.config.ts", strategy: "scaffold", source: "nuxt-app/prisma.config.ts" },
     ],
     versionProfiles: {
-      n4: { "engines.node": ">=22.0.0", "devDependencies.nuxt": "^4.0.0", "devDependencies.jiti": "^2.0.0", "scripts.postinstall": "nuxt prepare" },
-      n3: {},
+      "nuxt-4": { "engines.node": ">=22.0.0", "devDependencies.nuxt": "^4.0.0", "devDependencies.jiti": "^2.0.0", "scripts.postinstall": "nuxt prepare" },
+      "nuxt-3": {},
     },
   }),
   "nuxt-app/eslint.config.ts": "export default createStreamctlEslint()\n",
@@ -69,7 +69,7 @@ function baseOpts(overrides: Partial<RunInitOptions> = {}): RunInitOptions {
     cliVersion: CLI_VERSION,
     // Explicit base and profile always win over manifest detection.
     base: "nuxt-app",
-    profile: "n4",
+    profile: "nuxt-4",
     yes: true,
     install: async () => {},
     checkRegistryAuth: async () => true,
@@ -101,14 +101,14 @@ describe("runInit", () => {
     const result = await runInit(baseOpts({ install }));
 
     expect(result.base).toBe("nuxt-app");
-    expect(result.profile).toBe("n4");
+    expect(result.profile).toBe("nuxt-4");
     expect(install).toHaveBeenCalledTimes(1);
 
     const config = await readFile(join(repo, ".streamctl", "config.ts"), "utf8");
     expect(config).toContain(`import { defineStreamctlConfig } from "@sidebase/streamctl"`);
     expect(config).toContain(`package: "@acme/payload"`);
     expect(config).toContain(`base: "nuxt-app"`);
-    expect(config).toContain(`profile: "n4"`);
+    expect(config).toContain(`profile: "nuxt-4"`);
     expect(config).toContain(`version: "${PAYLOAD_VERSION}"`);
 
     // `.npmrc` is a preset-managed block written by the first sync, not by init itself.
@@ -148,7 +148,7 @@ describe("runInit", () => {
     expect(config).toContain("package: \"@acme/payload\"");
     expect(config).toContain("base: \"nuxt-app\"");
     expect(config).toContain(`version: "${PAYLOAD_VERSION}"`);
-    expect(config).toContain("profile: \"n4\"");
+    expect(config).toContain("profile: \"nuxt-4\"");
     expect(config).not.toContain("__PACKAGE__");
     expect(config).not.toContain("__PROFILE__");
   });
@@ -181,8 +181,8 @@ describe("runInit", () => {
 
   it("uses the explicit --profile", async () => {
     await writeFile(join(repo, "package.json"), JSON.stringify({ name: "app" }));
-    const result = await runInit(baseOpts({ profile: "n4" }));
-    expect(result.profile).toBe("n4");
+    const result = await runInit(baseOpts({ profile: "nuxt-4" }));
+    expect(result.profile).toBe("nuxt-4");
   });
 
   // The flag always wins over detection, so an undeclared `--profile` used to sail
@@ -193,7 +193,7 @@ describe("runInit", () => {
     expect(error).toBeInstanceOf(StreamctlError);
     expect((error as StreamctlError).code).toBe("CONFIG_INVALID");
     expect((error as StreamctlError).message).toContain("\"n5\"");
-    expect((error as StreamctlError).message).toContain("n4"); // lists the declared names
+    expect((error as StreamctlError).message).toContain("nuxt-4"); // lists the declared names
   });
 
   it("rejects an already-initialized repo with ALREADY_INITIALIZED", async () => {
@@ -457,8 +457,8 @@ async function writeV2Manifest(): Promise<void> {
       schemaVersion: 2,
       presets: ["base", "nuxt-app"],
       profiles: [
-        { name: "n4", detect: { dependency: "nuxt", majorIs: 4 } },
-        { name: "n3", detect: { dependency: "nuxt", majorIs: 3 } },
+        { name: "nuxt-4", detect: { dependency: "nuxt", majorIs: 4 } },
+        { name: "nuxt-3", detect: { dependency: "nuxt", majorIs: 3 } },
       ],
       defaultBase: "nuxt-app",
     }),
@@ -474,11 +474,11 @@ describe("runInit (v2 manifest auto-detection)", () => {
     const result = await runInit(baseOpts({ base: undefined, profile: undefined, logger: { warn } }));
 
     // Profile from `profiles[].detect`, base from `defaultBase`.
-    expect(result.profile).toBe("n4");
+    expect(result.profile).toBe("nuxt-4");
     expect(result.base).toBe("nuxt-app");
-    expect(await readFile(join(repo, ".streamctl", "config.ts"), "utf8")).toContain(`profile: "n4"`);
+    expect(await readFile(join(repo, ".streamctl", "config.ts"), "utf8")).toContain(`profile: "nuxt-4"`);
     // Detection is never silent: the evidence is logged.
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("detected profile \"n4\""));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("detected profile \"nuxt-4\""));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("nuxt ^4.2.0 in devDependencies"));
   });
 
@@ -488,7 +488,7 @@ describe("runInit (v2 manifest auto-detection)", () => {
 
     const result = await runInit(baseOpts({ base: undefined, profile: undefined }));
 
-    expect(result.profile).toBe("n3");
+    expect(result.profile).toBe("nuxt-3");
   });
 
   it("fails with PROFILE_DETECT_FAILED when nothing detectable is present", async () => {
@@ -501,16 +501,16 @@ describe("runInit (v2 manifest auto-detection)", () => {
     expect((error as StreamctlError).code).toBe("PROFILE_DETECT_FAILED");
     expect((error as StreamctlError).message).toContain("pass --profile");
     // The message enumerates the manifest's profiles so the user knows the valid set.
-    expect((error as StreamctlError).message).toContain("n4, n3");
+    expect((error as StreamctlError).message).toContain("nuxt-4, nuxt-3");
   });
 
   it("an explicit --profile overrides detection even when the dependency disagrees", async () => {
     await writeV2Manifest();
     await writeFile(join(repo, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^3.0.0" } }));
 
-    const result = await runInit(baseOpts({ base: undefined, profile: "n4" }));
+    const result = await runInit(baseOpts({ base: undefined, profile: "nuxt-4" }));
 
-    expect(result.profile).toBe("n4");
+    expect(result.profile).toBe("nuxt-4");
     expect(result.base).toBe("nuxt-app"); // still defaulted from the manifest
   });
 });

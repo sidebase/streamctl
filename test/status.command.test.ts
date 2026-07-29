@@ -33,7 +33,7 @@ async function makeRepo(): Promise<void> {
     await writeFile(join(pkg, "presets", source), content);
   }
   await mkdir(join(repo, ".streamctl"), { recursive: true });
-  await writeFile(join(repo, ".streamctl", "config.ts"), `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "n4" };\n`);
+  await writeFile(join(repo, ".streamctl", "config.ts"), `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "nuxt-4" };\n`);
 }
 
 beforeEach(async () => {

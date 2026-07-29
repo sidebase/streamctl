@@ -172,7 +172,7 @@ describe("formatCheck", () => {
 
 describe("formatInit", () => {
   it("renders the header block and the embedded sync rows", () => {
-    const data: InitResult = { base: "nuxt-app", profile: "n4", version: "1.4.0", cliVersion: "0.1.0", sync: syncResult };
+    const data: InitResult = { base: "nuxt-app", profile: "nuxt-4", version: "1.4.0", cliVersion: "0.1.0", sync: syncResult };
     const out = formatInit(data, PLAIN);
     // The header carries the CLI's version, the payload pin is its own row. Two
     // different numbers; never render them as one.
@@ -182,7 +182,7 @@ describe("formatInit", () => {
     expect(out).toContain("base");
     expect(out).toContain("nuxt-app");
     expect(out).toContain("profile");
-    expect(out).toContain("n4");
+    expect(out).toContain("nuxt-4");
     expect(out).toContain("[+]  written");
     expect(out).toContain("initialized. Review changes and commit.");
   });
@@ -254,7 +254,7 @@ describe("formatStatus", () => {
       { path: "eslint.config.ts", strategy: "scaffold", state: "scaffolded" },
     ],
     payload: { package: "@acme/cfg", pinned: "1.0.0", installed: "1.0.0" },
-    profile: "n4",
+    profile: "nuxt-4",
     cliVersion: "0.1.0",
     lockfileStale: false,
   };
@@ -265,7 +265,7 @@ describe("formatStatus", () => {
     expect(out).toContain("package  @acme/cfg");
     expect(out).toContain("pinned");
     expect(out).toContain("installed");
-    expect(out).toContain("profile  n4");
+    expect(out).toContain("profile  nuxt-4");
     expect(out).toContain("in-sync");
     expect(out).toContain("drift");
     expect(out).toContain("conflict");
@@ -349,7 +349,7 @@ describe("renderReport", () => {
 
     it("valid details of every kind still render", () => {
       const upgrade: UpgradeResult = { fromVersion: "1.0.0", toVersion: "2.0.0", dependencyBumps: [], sync: null, dryRun: false };
-      const status: StatusResult = { files: [{ path: ".npmrc", strategy: "block", state: "drift" }], payload: { package: "p", pinned: "1", installed: "1" }, profile: "n4", cliVersion: "0.1.0", lockfileStale: false };
+      const status: StatusResult = { files: [{ path: ".npmrc", strategy: "block", state: "drift" }], payload: { package: "p", pinned: "1", installed: "1" }, profile: "nuxt-4", cliVersion: "0.1.0", lockfileStale: false };
       expect(renderReport("sync", syncResult, PLAIN)).toContain("streamctl sync");
       expect(renderReport("check", { inSync: true, drift: [], structuralFaults: [], versionSkew: [] }, PLAIN)).toContain("streamctl check");
       expect(renderReport("upgrade", upgrade, PLAIN)).toContain("streamctl upgrade");

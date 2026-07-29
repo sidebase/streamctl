@@ -36,7 +36,7 @@ pnpm dlx @sidebase/streamctl init --package @your-org/config --yes
 ```
 
 `init` detects the Nuxt major from `package.json` and proposes `base: "nuxt-app"`
-+ `profile: "n4"`. It then:
++ `profile: "nuxt-4"`. It then:
 
 - writes `.streamctl/config.ts` (the pinned `version` + your knobs),
 - scaffolds the `.npmrc` registry block (incl. `always-auth=true`),
@@ -46,7 +46,7 @@ pnpm dlx @sidebase/streamctl init --package @your-org/config --yes
   (existing files are never overwritten),
 - chains into the first `sync`.
 
-Overrides: `--base <nuxt-app|base>`, `--profile <n4|n3>`. If the Nuxt major can't
+Overrides: `--base <nuxt-app|base>`, `--profile <nuxt-4|nuxt-3>`. If the Nuxt major can't
 be detected and no `--profile` is given, `init` fails with `PROFILE_DETECT_FAILED`.
 
 ## 2. Interactive first `sync`
@@ -126,7 +126,7 @@ Disable globally or per-key in `.streamctl/config.ts`:
 export default {
   base: "nuxt-app",
   version: "1.2.3",
-  profile: "n4",
+  profile: "nuxt-4",
   versionSync: false,                              // opt out entirely
   versionSyncExclude: ["devDependencies.typescript"], // or per allow-list key
 };

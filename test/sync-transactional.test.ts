@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runSync } from "../src/engine/sync";
 import { StreamctlError } from "../src/errors";
 
-const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "n4" };
+const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "nuxt-4" };
 
 function stubPayload(files: Record<string, string>): PayloadHandle {
   return {

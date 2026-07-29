@@ -2,7 +2,7 @@ export default {
   package: "@acme/payload",
   base: "nuxt-app",
   version: "1.2.3",
-  profile: "n4",
+  profile: "nuxt-4",
   versionSync: true,
   versionSyncExclude: ["devDependencies.typescript"],
   eslint: { zod: "full", trpcGuard: true },

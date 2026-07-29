@@ -11,9 +11,9 @@ type CheckArgs = Parameters<NonNullable<typeof checkCommand.run>>[0];
 const VERSION = "9.9.9";
 
 const TEMPLATES: Record<string, string> = {
-  // Declares the `n4` that the config below pins and that `base/preset.json`'s
+  // Declares the `nuxt-4` that the config below pins and that `base/preset.json`'s
   // versionProfiles keys off. A payload using a profile must declare it.
-  "manifest.json": JSON.stringify({ schemaVersion: 2, presets: ["base"], profiles: [{ name: "n4" }], defaultBase: "base" }),
+  "manifest.json": JSON.stringify({ schemaVersion: 2, presets: ["base"], profiles: [{ name: "nuxt-4" }], defaultBase: "base" }),
   "base/preset.json": JSON.stringify({
     name: "base",
     files: [
@@ -23,7 +23,7 @@ const TEMPLATES: Record<string, string> = {
     ],
     // Baseline reconciles engines.node; inert unless a test repo carries a
     // (skewed) package.json.
-    versionProfiles: { n4: { "engines.node": ">=24.13.0" } },
+    versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0" } },
   }),
   "base/editorconfig": "root = true\n",
   "base/npmrc": "registry=https://example\n",
@@ -45,7 +45,7 @@ async function makeRepo(): Promise<void> {
     await writeFile(join(pkg, "presets", source), content);
   }
   await mkdir(join(repo, ".streamctl"), { recursive: true });
-  await writeFile(join(repo, ".streamctl", "config.ts"), `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "n4" };\n`);
+  await writeFile(join(repo, ".streamctl", "config.ts"), `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "nuxt-4" };\n`);
 }
 
 /** The consumer's `.vscode/settings.json`: `editor` is a string, the payload declares an object. */
@@ -249,7 +249,7 @@ describe("sync + check commands (exit codes)", () => {
     expect(envelope.ok).toBe(false);
     expect(envelope.error.code).toBe("CONFIG_INVALID");
     expect(envelope.error.message).toContain("n5");
-    expect(envelope.error.message).toContain("n4");
+    expect(envelope.error.message).toContain("nuxt-4");
   });
 
   it("check exits 3 after a managed-region edit", async () => {

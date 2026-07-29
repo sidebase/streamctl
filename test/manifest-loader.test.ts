@@ -23,14 +23,14 @@ function payloadOf(files: Record<string, unknown>): PayloadHandle {
 /** Valid two-preset v2 payload: nuxt-app extends base, both carry renders and configKeys. */
 function validPayload(): PayloadHandle {
   return payloadOf({
-    "manifest.json": { schemaVersion: 2, presets: ["base", "nuxt-app"], profiles: [{ name: "n4", detect: { dependency: "nuxt", majorIs: 4 } }], defaultBase: "nuxt-app" },
+    "manifest.json": { schemaVersion: 2, presets: ["base", "nuxt-app"], profiles: [{ name: "nuxt-4", detect: { dependency: "nuxt", majorIs: 4 } }], defaultBase: "nuxt-app" },
     "base/preset.json": {
       name: "base",
       files: [
         { path: ".editorconfig", strategy: "full", source: "base/editorconfig" },
         { path: "Dockerfile", strategy: "full", source: "base/Dockerfile", render: "dockerfile" },
       ],
-      versionProfiles: { n4: { "engines.node": ">=24.13.0" } },
+      versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0" } },
       renders: { dockerfile: { placeholders: { APT: { configPath: "aptPackages", default: "" } } } },
       configKeys: { aptPackages: "string[]" },
     },
@@ -41,7 +41,7 @@ function validPayload(): PayloadHandle {
         { path: "eslint.config.ts", strategy: "scaffold", source: "nuxt-app/eslint.config.ts" },
         { path: ".github/workflows/ci.yaml", strategy: "full", source: "nuxt-app/ci.yaml", render: "ci", enabledBy: "ci.unitTests" },
       ],
-      versionProfiles: { n4: { "devDependencies.nuxt": "^4.3.0" } },
+      versionProfiles: { "nuxt-4": { "devDependencies.nuxt": "^4.3.0" } },
       renders: { ci: { fragments: [{ toggle: "ci.unitTests", source: "nuxt-app/test.job" }] } },
       configKeys: { ci: "object" },
     },
@@ -91,14 +91,14 @@ describe("schemaVersion contract", () => {
 
   it("surfaces through resolvePresetChain too", async () => {
     const payload = payloadOf({ "manifest.json": { schemaVersion: 3, presets: ["base"], profiles: [], defaultBase: "base" } });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
   });
 });
 
 describe("resolvePresetChain (v2 payload)", () => {
   it("walks the extends chain parents-first and merges the baseline", async () => {
-    const { files, baseline } = await resolvePresetChain(validPayload(), "nuxt-app", "n4");
+    const { files, baseline } = await resolvePresetChain(validPayload(), "nuxt-app", "nuxt-4");
     expect(files.map(f => f.path)).toEqual([".editorconfig", "Dockerfile", "eslint.config.ts", ".github/workflows/ci.yaml"]);
     // Each render key must resolve to the merged RenderDef, not the bare key.
     expect(files.find(f => f.path === "Dockerfile")?.renderDef).toEqual({ placeholders: { APT: { configPath: "aptPackages", default: "" } } });
@@ -107,7 +107,7 @@ describe("resolvePresetChain (v2 payload)", () => {
   });
 
   it("resolves a preset with no parents", async () => {
-    const { files } = await resolvePresetChain(validPayload(), "base", "n4");
+    const { files } = await resolvePresetChain(validPayload(), "base", "nuxt-4");
     expect(files.map(f => f.path)).toEqual([".editorconfig", "Dockerfile"]);
   });
 
@@ -116,7 +116,7 @@ describe("resolvePresetChain (v2 payload)", () => {
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": { name: "base", files: [{ path: "tsconfig.json", strategy: "full", source: "tsconfig", adoption: "expected" }] },
     });
-    const { files } = await resolvePresetChain(payload, "base", "n4");
+    const { files } = await resolvePresetChain(payload, "base", "nuxt-4");
     expect(files.find(f => f.path === "tsconfig.json")?.adoption).toBe("expected");
   });
 
@@ -125,12 +125,12 @@ describe("resolvePresetChain (v2 payload)", () => {
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": { name: "base", files: [{ path: "eslint.config.ts", strategy: "scaffold", source: "eslint", shadowedBy: ["eslint.config.mjs", "eslint.config.js"] }] },
     });
-    const { files } = await resolvePresetChain(payload, "base", "n4");
+    const { files } = await resolvePresetChain(payload, "base", "nuxt-4");
     expect(files.find(f => f.path === "eslint.config.ts")?.shadowedBy).toEqual(["eslint.config.mjs", "eslint.config.js"]);
   });
 
   it("merges configKeys across the chain, child wins", async () => {
-    const { configKeys } = await resolvePresetChain(validPayload(), "nuxt-app", "n4");
+    const { configKeys } = await resolvePresetChain(validPayload(), "nuxt-app", "nuxt-4");
     expect(configKeys).toEqual({ aptPackages: "string[]", ci: "object" });
   });
 
@@ -139,7 +139,7 @@ describe("resolvePresetChain (v2 payload)", () => {
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": { name: "base", files: [{ path: ".x", strategy: "full", source: "x" }] },
     });
-    const { configKeys } = await resolvePresetChain(payload, "base", "n4");
+    const { configKeys } = await resolvePresetChain(payload, "base", "nuxt-4");
     expect(configKeys).toEqual({});
   });
 
@@ -154,7 +154,7 @@ describe("resolvePresetChain (v2 payload)", () => {
         configKeys: { "ci.unitTests": "boolean" },
       },
     });
-    const { configKeys } = await resolvePresetChain(payload, "base", "n4");
+    const { configKeys } = await resolvePresetChain(payload, "base", "nuxt-4");
     expect(configKeys).toEqual({ "ci.unitTests": "boolean" });
   });
 
@@ -169,7 +169,7 @@ describe("resolvePresetChain (v2 payload)", () => {
         configKeys: { "ci.upgradePR": "boolean" },
       },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("ci.upgradePr");
     expect(error.message).toContain("ci.upgradePR"); // names what IS declared
@@ -186,7 +186,7 @@ describe("resolvePresetChain (v2 payload)", () => {
         configKeys: { ci: "object" },
       },
     });
-    const { files } = await resolvePresetChain(payload, "base", "n4");
+    const { files } = await resolvePresetChain(payload, "base", "nuxt-4");
     expect(files.map(f => f.path)).toContain(".github/workflows/ci.yaml");
   });
 
@@ -200,7 +200,7 @@ describe("resolvePresetChain (v2 payload)", () => {
         configKeys: { aptPackages: "string[]" },
       },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("aptPackage");
   });
@@ -212,7 +212,7 @@ describe("v2 load-time failures", () => {
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": { name: "base", files: [{ path: ".x", stratgy: "full", source: "x" }] },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("presets/base/preset.json");
     expect(error.message).toContain("files.0");
@@ -224,7 +224,7 @@ describe("v2 load-time failures", () => {
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": { name: "base", files: [{ path: ".x", strategy: "full", source: "x" }] },
     });
-    const error = await caught(resolvePresetChain(payload, "nuxt-app", "n4"));
+    const error = await caught(resolvePresetChain(payload, "nuxt-app", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("\"nuxt-app\" is not listed");
   });
@@ -235,7 +235,7 @@ describe("v2 load-time failures", () => {
     const error = await caught(resolvePresetChain(validPayload(), "base", "n5"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("\"n5\"");
-    expect(error.message).toContain("n4"); // lists what IS declared
+    expect(error.message).toContain("nuxt-4"); // lists what IS declared
     expect(error.details).toMatchObject({ file: "presets/manifest.json", profile: "n5" });
   });
 
@@ -265,7 +265,7 @@ describe("v2 load-time failures", () => {
     const payload = payloadOf({
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("PAYLOAD_INVALID");
     expect(error.message).toContain("presets/base/preset.json is missing");
   });
@@ -275,7 +275,7 @@ describe("v2 load-time failures", () => {
       "manifest.json": { schemaVersion: 2, presets: ["child"], profiles: [], defaultBase: "child" },
       "child/preset.json": { name: "child", extends: ["ghost"], files: [{ path: ".x", strategy: "full", source: "x" }] },
     });
-    const error = await caught(resolvePresetChain(payload, "child", "n4"));
+    const error = await caught(resolvePresetChain(payload, "child", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("extends \"ghost\"");
   });
@@ -285,7 +285,7 @@ describe("v2 load-time failures", () => {
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": { name: "wrong", files: [{ path: ".x", strategy: "full", source: "x" }] },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("declares name \"wrong\"");
   });
@@ -295,7 +295,7 @@ describe("v2 load-time failures", () => {
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": { name: "base", files: [{ path: "Dockerfile", strategy: "full", source: "x", render: "dockerfile" }] },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("render \"dockerfile\"");
     expect(error.message).toContain("no preset in the chain declares");
@@ -307,10 +307,10 @@ describe("v2 load-time failures", () => {
       "base/preset.json": {
         name: "base",
         files: [{ path: ".x", strategy: "full", source: "x" }],
-        versionProfiles: { n4: { browserslist: "> 1%" } },
+        versionProfiles: { "nuxt-4": { browserslist: "> 1%" } },
       },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("reconcilable version key");
     expect(error.message).toContain("versionProfiles");
@@ -321,7 +321,7 @@ describe("v2 load-time failures", () => {
       "manifest.json": { schemaVersion: 2, presets: ["base"], profiles: [], defaultBase: "base" },
       "base/preset.json": { name: "base", files: [{ path: ".x", strategy: "full", source: "x", enabledBy: "ci.upgradePr" }] },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("ci.upgradePr");
     expect(error.message).toContain("configKeys");
@@ -335,10 +335,10 @@ describe("manifest is required", () => {
       "base/preset.json": {
         name: "base",
         files: [{ path: ".editorconfig", strategy: "full", source: "base/editorconfig" }],
-        versionProfiles: { n4: { "engines.node": ">=24.13.0" } },
+        versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0" } },
       },
     });
-    const error = await caught(resolvePresetChain(payload, "base", "n4"));
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("PAYLOAD_INVALID");
     expect(error.message).toContain("has no presets/manifest.json");
   });

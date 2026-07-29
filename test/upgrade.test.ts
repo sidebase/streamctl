@@ -64,7 +64,7 @@ async function makeRepo(): Promise<void> {
     `${JSON.stringify({ name: "app", packageManager: "npm@10.0.0", devDependencies: { "@acme/payload": FROM, "@sidebase/streamctl": FROM } }, null, 2)}\n`,
   );
   await mkdir(join(repo, ".streamctl"), { recursive: true });
-  await writeConfig(`export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "n4",\n};\n`);
+  await writeConfig(`export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
 }
 
 function baseOpts(overrides: Partial<RunUpgradeOptions> = {}): RunUpgradeOptions {
@@ -296,7 +296,7 @@ describe("runUpgrade", () => {
       join(pkgDir, "package.json"),
       `${JSON.stringify({ name: "app", packageManager: "pnpm@10.28.1", devDependencies: { "@acme/payload": FROM, "@sidebase/streamctl": FROM } }, null, 2)}\n`,
     );
-    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "n4",\n};\n`);
+    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
 
     const before = await readFile(rootLock, "utf8");
     const install = vi.fn(async () => {
@@ -324,7 +324,7 @@ describe("runUpgrade", () => {
       join(pkgDir, "package.json"),
       `${JSON.stringify({ name: "app", packageManager: "pnpm@10.28.1", devDependencies: { "@acme/payload": FROM, "@sidebase/streamctl": FROM } }, null, 2)}\n`,
     );
-    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "n4",\n};\n`);
+    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
 
     const install = vi.fn(async () => {
       // Dirty the lockfile, or the restore is a no-op and never reports a failure.
@@ -355,7 +355,7 @@ describe("runUpgrade", () => {
       join(pkgDir, "package.json"),
       `${JSON.stringify({ name: "app", packageManager: "pnpm@10.28.1", devDependencies: { "@acme/payload": FROM, "@sidebase/streamctl": FROM } }, null, 2)}\n`,
     );
-    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "n4",\n};\n`);
+    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
     const rootLock = join(repo, "pnpm-lock.yaml");
 
     const install = vi.fn(async () => {
@@ -466,7 +466,7 @@ describe("runUpgrade", () => {
 
   it("ignores a commented-out pin and a prefix-key decoy", async () => {
     await writeConfig(
-      `// version: "0.0.0" (commented decoy, must not be bumped)\nexport default {\n  package: "@acme/payload",\n  base: "base",\n  versionSync: true,\n  version: "${FROM}",\n  profile: "n4",\n};\n`,
+      `// version: "0.0.0" (commented decoy, must not be bumped)\nexport default {\n  package: "@acme/payload",\n  base: "base",\n  versionSync: true,\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`,
     );
     await runUpgrade(baseOpts());
 
@@ -481,7 +481,7 @@ describe("runUpgrade", () => {
   // no ambiguity error fired, and got bumped while the real pin went stale.
   it("ignores a pin inside a block comment, even at column 0", async () => {
     await writeConfig(
-      `/*\nExample:\nversion: "0.0.0"\n*/\nexport default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "n4",\n};\n`,
+      `/*\nExample:\nversion: "0.0.0"\n*/\nexport default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`,
     );
     await runUpgrade(baseOpts());
 
@@ -494,7 +494,7 @@ describe("runUpgrade", () => {
   // swallow the pin that follows.
   it("does not treat a `/*` inside a string literal as a comment", async () => {
     await writeConfig(
-      `export default {\n  package: "@acme/payload",\n  base: "base",\n  ignore: "src/**/*.ts",\n  version: "${FROM}",\n  profile: "n4",\n};\n`,
+      `export default {\n  package: "@acme/payload",\n  base: "base",\n  ignore: "src/**/*.ts",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`,
     );
     await runUpgrade(baseOpts());
     expect(await readConfig()).toContain(`version: "${TO}"`);
@@ -567,7 +567,7 @@ describe("runUpgrade", () => {
   });
 
   it("CONFIG_INVALID when no version pin sits on its own line", async () => {
-    await writeConfig(`export default { package: "@acme/payload", base: "base", version: "${FROM}", profile: "n4" };\n`);
+    await writeConfig(`export default { package: "@acme/payload", base: "base", version: "${FROM}", profile: "nuxt-4" };\n`);
     const install = vi.fn(async () => {});
     const error = await runUpgrade(baseOpts({ install })).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StreamctlError);
@@ -586,7 +586,7 @@ describe("runUpgrade", () => {
   // and the pin, devDeps and install all went ahead first.
   describe("stage-2 config validation", () => {
     const withKnob = (knob: string): string =>
-      `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "n4",\n  ci: { ${knob} },\n};\n`;
+      `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n  ci: { ${knob} },\n};\n`;
 
     // The shared harness pre-installs the target version to fake the post-install
     // state. Pre-write validation reads the payload actually on disk before the
@@ -652,7 +652,7 @@ describe("runUpgrade", () => {
     // order used to decide, so the knob got rewritten with the streamctl version
     // and the real pin stayed stale.
     await writeConfig(
-      `export default {\n  package: "@acme/payload",\n  base: "base",\n  ci: {\n    version: "22",\n  },\n  version: "${FROM}",\n  profile: "n4",\n};\n`,
+      `export default {\n  package: "@acme/payload",\n  base: "base",\n  ci: {\n    version: "22",\n  },\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`,
     );
     await runUpgrade(baseOpts());
 
@@ -664,7 +664,7 @@ describe("runUpgrade", () => {
 
   it("same when the pin is declared before the nested knob", async () => {
     await writeConfig(
-      `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  ci: {\n    version: "22",\n  },\n  profile: "n4",\n};\n`,
+      `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  ci: {\n    version: "22",\n  },\n  profile: "nuxt-4",\n};\n`,
     );
     await runUpgrade(baseOpts());
 
@@ -678,7 +678,7 @@ describe("runUpgrade", () => {
     // Depth, not document order, is the selector, and depth is only meaningful
     // relative to the other `version:` lines in the file.
     await writeConfig(
-      `export default {\n\tpackage: "@acme/payload",\n\tbase: "base",\n\tversion: "${FROM}",\n\tprofile: "n4",\n};\n`,
+      `export default {\n\tpackage: "@acme/payload",\n\tbase: "base",\n\tversion: "${FROM}",\n\tprofile: "nuxt-4",\n};\n`,
     );
     await runUpgrade(baseOpts());
     expect(await readConfig()).toContain(`\tversion: "${TO}"`);
@@ -692,7 +692,7 @@ describe("runUpgrade", () => {
     { blanks: 3, why: "used to overwrite the nested knob" },
   ])("$blanks blank lines before the pin ($why)", async ({ blanks }) => {
     await writeConfig(
-      `export default {\n  package: "@acme/payload",\n  base: "base",\n  ci: {\n    version: "22",\n  },${"\n".repeat(blanks + 1)}  version: "${FROM}",\n  profile: "n4",\n};\n`,
+      `export default {\n  package: "@acme/payload",\n  base: "base",\n  ci: {\n    version: "22",\n  },${"\n".repeat(blanks + 1)}  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`,
     );
     await runUpgrade(baseOpts());
 
@@ -705,7 +705,7 @@ describe("runUpgrade", () => {
   });
 
   it("two pins at the same depth are ambiguous, so nothing is written", async () => {
-    const ambiguous = `const shared = {\n  version: "22",\n};\n\nexport default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "n4",\n  ci: shared,\n};\n`;
+    const ambiguous = `const shared = {\n  version: "22",\n};\n\nexport default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n  ci: shared,\n};\n`;
     await writeConfig(ambiguous);
     const before = await hashSnapshot();
     const install = vi.fn(async () => {});
@@ -725,7 +725,7 @@ describe("runUpgrade", () => {
 describe("runUpgrade: version-reconcile dirty warning", () => {
   const git = (...args: string[]): Promise<unknown> => execFileAsync("git", args, { cwd: repo });
 
-  // A preset whose n4 profile reconciles `engines.node`, so the chained sync
+  // A preset whose nuxt-4 profile reconciles `engines.node`, so the chained sync
   // produces a real version change and the warning is reachable.
   async function withBaseline(): Promise<void> {
     await writeFile(
@@ -737,7 +737,7 @@ describe("runUpgrade: version-reconcile dirty warning", () => {
           { path: "eslint.config.ts", strategy: "scaffold", source: "base/eslint.config.ts" },
         ],
         configKeys: { "ci.unitTests": "boolean", "ci.version": "string" },
-        versionProfiles: { n4: { "engines.node": ">=24.13.0" } },
+        versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0" } },
       }),
     );
   }

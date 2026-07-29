@@ -11,7 +11,7 @@ import { runSync } from "../src/engine/sync";
 import { StreamctlError } from "../src/errors";
 import { isStructuredPath } from "../src/paths";
 
-const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "n4" };
+const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "nuxt-4" };
 
 /** A `full` `.json` target whose payload template is deliberately not valid JSON. */
 const BROKEN_JSON_FILE: ManagedFile = { path: "broken.json", strategy: "full", source: "base/broken.json" };

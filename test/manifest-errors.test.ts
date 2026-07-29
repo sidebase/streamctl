@@ -118,7 +118,7 @@ describe("malformed installed package.json", () => {
 
 // Same class of failure, but on the consumer's own package.json during reconcile.
 describe("malformed package.json in reconcileVersions", () => {
-  const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "n4" };
+  const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "nuxt-4" };
   let cwd: string;
   beforeEach(async () => {
     cwd = await mkdtemp(join(tmpdir(), "streamctl-versions-err-"));

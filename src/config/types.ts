@@ -54,7 +54,7 @@ export interface StreamctlConfig {
   package: string;
   base: string;
   version: string;
-  /** `n3` is reserved; use `"n4"`. */
+  /** Any non-empty string; must name a profile the payload manifest declares in `profiles[]` (e.g. `"nuxt-4"`). */
   profile: Profile;
   /** Master opt-out for `package.json` version reconciliation. Default `true`. */
   versionSync?: boolean;

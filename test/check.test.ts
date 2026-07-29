@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCheck } from "../src/engine/check";
 import { StreamctlError } from "../src/errors";
 
-const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "n4" };
+const config: StreamctlConfig = { package: "@acme/payload", base: "base", version: "1.0.0", profile: "nuxt-4" };
 
 const payload: PayloadHandle = {
   version: "1.0.0",
@@ -69,7 +69,7 @@ describe("runCheck", () => {
   });
 });
 
-/** A v2 payload (manifest.json present) whose `n3` profile detects `nuxt` major 3. */
+/** A v2 payload (manifest.json present) whose `nuxt-3` profile detects `nuxt` major 3. */
 const v2Payload: PayloadHandle = {
   version: "2.0.0",
   async read(source) {
@@ -81,8 +81,8 @@ const v2Payload: PayloadHandle = {
         // payload DOES declare but detection disagrees with ("valid but probably
         // wrong"). An undeclared profile is the separate hard CONFIG_INVALID.
         profiles: [
-          { name: "n3", detect: { dependency: "nuxt", majorIs: 3 } },
-          { name: "n4", detect: { dependency: "nuxt", majorIs: 4 } },
+          { name: "nuxt-3", detect: { dependency: "nuxt", majorIs: 3 } },
+          { name: "nuxt-4", detect: { dependency: "nuxt", majorIs: 4 } },
         ],
         defaultBase: "base",
       }),
@@ -144,14 +144,14 @@ describe("runCheck stage-2 config validation", () => {
 describe("runCheck profile-mismatch warning", () => {
   it("warns when detection disagrees with config.profile, but stays in sync", async () => {
     await writeFile(join(cwd, ".editorconfig"), "root = true\n");
-    // config pins n4 but the project depends on nuxt 3, so detection says n3.
+    // config pins nuxt-4 but the project depends on nuxt 3, so detection says nuxt-3.
     await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^3.0.0" } }));
     const warnings: string[] = [];
 
     const result = await runCheck(cwd, v2Payload, config, "drift", { logger: { warn: m => warnings.push(m) } });
 
     expect(result.inSync).toBe(true);
-    expect(warnings.some(w => w.includes("does not match") && w.includes("n3"))).toBe(true);
+    expect(warnings.some(w => w.includes("does not match") && w.includes("nuxt-3"))).toBe(true);
   });
 
   it("stays silent when they agree", async () => {
@@ -159,13 +159,13 @@ describe("runCheck profile-mismatch warning", () => {
     await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^3.0.0" } }));
     const warnings: string[] = [];
 
-    await runCheck(cwd, v2Payload, { ...config, profile: "n3" }, "drift", { logger: { warn: m => warnings.push(m) } });
+    await runCheck(cwd, v2Payload, { ...config, profile: "nuxt-3" }, "drift", { logger: { warn: m => warnings.push(m) } });
 
     expect(warnings).toEqual([]);
   });
 });
 
-/** A v2 payload whose `n4` baseline reconciles `engines.node` (drives version skew). */
+/** A v2 payload whose `nuxt-4` baseline reconciles `engines.node` (drives version skew). */
 const reconcilePayload: PayloadHandle = {
   version: "1.0.0",
   async read(source) {
@@ -174,7 +174,7 @@ const reconcilePayload: PayloadHandle = {
       "base/preset.json": JSON.stringify({
         name: "base",
         files: [{ path: ".editorconfig", strategy: "full", source: "base/editorconfig" }],
-        versionProfiles: { n4: { "engines.node": ">=24.13.0" } },
+        versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0" } },
       }),
       "base/editorconfig": "root = true\n",
     };

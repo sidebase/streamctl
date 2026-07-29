@@ -10,7 +10,7 @@ import { isFileEnabled, readConfigPath, renderFile } from "../src/engine/render"
 import { runSync } from "../src/engine/sync";
 import { StreamctlError } from "../src/errors";
 
-const cfg = (over: Partial<StreamctlConfig> = {}): StreamctlConfig => ({ package: "@x/config", base: "b", version: "1.0.0", profile: "n4", ...over });
+const cfg = (over: Partial<StreamctlConfig> = {}): StreamctlConfig => ({ package: "@x/config", base: "b", version: "1.0.0", profile: "nuxt-4", ...over });
 
 describe("renderFile: placeholders", () => {
   it("substitutes a scalar config value, falling back to the default", () => {

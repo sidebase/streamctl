@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { validateConfigKeys, validateStreamctlConfig, validateStreamctlConfigWithKeys } from "../src/config/validate";
 import { StreamctlError } from "../src/errors";
 
-const base = { package: "@acme/payload", base: "nuxt-app", version: "1.0.0", profile: "n4" } as const;
+const base = { package: "@acme/payload", base: "nuxt-app", version: "1.0.0", profile: "nuxt-4" } as const;
 
 describe("validateStreamctlConfig", () => {
   it("requires `package`", () => {
@@ -64,7 +64,7 @@ describe("validateStreamctlConfig", () => {
   });
 
   it("accepts any non-empty string profile", () => {
-    expect(validateStreamctlConfig({ ...base, profile: "n3" }).profile).toBe("n3");
+    expect(validateStreamctlConfig({ ...base, profile: "nuxt-3" }).profile).toBe("nuxt-3");
     expect(validateStreamctlConfig({ ...base, profile: "custom" }).profile).toBe("custom");
   });
 
@@ -183,6 +183,6 @@ describe("validateStreamctlConfigWithKeys (combined stages)", () => {
 
   it("returns the validated config when everything matches", () => {
     const config = validateStreamctlConfigWithKeys({ ...base, ci: { unitTests: true }, aptPackages: ["curl"] }, CONFIG_KEYS);
-    expect(config.profile).toBe("n4");
+    expect(config.profile).toBe("nuxt-4");
   });
 });

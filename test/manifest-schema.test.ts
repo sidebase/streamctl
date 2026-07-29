@@ -18,7 +18,7 @@ function preset(): Record<string, unknown> {
 }
 
 function payload(): Record<string, unknown> {
-  return { schemaVersion: 2, presets: ["base", "nuxt-app"], profiles: [{ name: "n4" }], defaultBase: "nuxt-app" };
+  return { schemaVersion: 2, presets: ["base", "nuxt-app"], profiles: [{ name: "nuxt-4" }], defaultBase: "nuxt-app" };
 }
 
 /** Every issue `path` from a parse that is expected to fail. */
@@ -41,7 +41,7 @@ describe("valid manifests parse", () => {
         { path: "Dockerfile", strategy: "full", source: "nuxt-app/Dockerfile", render: "dockerfile" },
         { path: ".github/workflows/deploy.yaml", strategy: "full", source: "nuxt-app/deploy.yaml", render: "deploy", enabledBy: "ci.deploy", adoption: "expected" },
       ],
-      versionProfiles: { n4: { "engines.node": ">=24.13.0", "packageManager": "pnpm@10.28.1", "devDependencies.nuxt": "^4.3.0", "scripts.postinstall": "nuxt prepare" } },
+      versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0", "packageManager": "pnpm@10.28.1", "devDependencies.nuxt": "^4.3.0", "scripts.postinstall": "nuxt prepare" } },
       renders: {
         dockerfile: { placeholders: { APT: { configPath: "aptPackages", default: "", pattern: "^[a-z0-9]+$", join: "space" } }, passthrough: ["PRISMA_VERSION"] },
         deploy: { placeholders: { NODE_VERSION: { configPath: "ci.nodeVersion", default: "24.13.0" } }, fragments: [{ forEach: "ci.deploy", source: "nuxt-app/deploy.job.yaml" }, { toggle: "ci.unitTests", source: "nuxt-app/x" }] },
@@ -57,7 +57,7 @@ describe("valid manifests parse", () => {
   });
 
   it("profiles may carry a detection probe", () => {
-    const withDetect = { ...payload(), profiles: [{ name: "n4", detect: { dependency: "nuxt", majorIs: 4 } }] };
+    const withDetect = { ...payload(), profiles: [{ name: "nuxt-4", detect: { dependency: "nuxt", majorIs: 4 } }] };
     expect(payloadManifestSchema.safeParse(withDetect).success).toBe(true);
   });
 });
@@ -150,27 +150,27 @@ describe("RenderDef", () => {
 
 describe("PresetManifest", () => {
   it("rejects a versionProfiles key outside the reconcile safety pattern", () => {
-    const paths = issuePaths({ ...preset(), versionProfiles: { n4: { browserslist: "> 1%" } } }, presetManifestSchema);
+    const paths = issuePaths({ ...preset(), versionProfiles: { "nuxt-4": { browserslist: "> 1%" } } }, presetManifestSchema);
     expect(paths.some(p => p.startsWith("versionProfiles"))).toBe(true);
   });
 
   it("accepts reconcilable versionProfiles keys", () => {
-    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { n4: { "devDependencies.typescript": "^6.0.0" } } }).success).toBe(true);
+    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { "nuxt-4": { "devDependencies.typescript": "^6.0.0" } } }).success).toBe(true);
   });
 
   it("accepts any scripts.<name>, not just scripts.postinstall", () => {
-    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { n4: { "scripts.lint": "oxlint . && eslint ." } } }).success).toBe(true);
+    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { "nuxt-4": { "scripts.lint": "oxlint . && eslint ." } } }).success).toBe(true);
   });
 
   it("covers all four dependency sections", () => {
     const keys = { "dependencies.a": "^1", "devDependencies.b": "^1", "peerDependencies.c": "^1", "optionalDependencies.d": "^1" };
-    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { n4: keys } }).success).toBe(true);
+    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { "nuxt-4": keys } }).success).toBe(true);
   });
 
   // The pattern is anchored to the exact npm field names, casing included.
   it("rejects a mis-cased dependency section", () => {
-    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { n4: { "Dependencies.x": "^1" } } }).success).toBe(false);
-    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { n4: { "devdependencies.x": "^1" } } }).success).toBe(false);
+    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { "nuxt-4": { "Dependencies.x": "^1" } } }).success).toBe(false);
+    expect(presetManifestSchema.safeParse({ ...preset(), versionProfiles: { "nuxt-4": { "devdependencies.x": "^1" } } }).success).toBe(false);
   });
 
   it("rejects a bad configKeys value", () => {

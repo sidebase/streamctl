@@ -42,13 +42,13 @@ describe("init --json envelope", () => {
     // installing the payload. --payload-version is passed for the same reason,
     // since resolving the pin would otherwise probe the registry.
     await initCommand.run?.({
-      args: { "package": "@acme/payload", "payload-version": "1.4.0", "base": "base", "profile": "n4", "install": false, "skip-registry-check": true, "yes": true, "json": true },
+      args: { "package": "@acme/payload", "payload-version": "1.4.0", "base": "base", "profile": "nuxt-4", "install": false, "skip-registry-check": true, "yes": true, "json": true },
     } as unknown as InitArgs);
 
     expect(process.exitCode).toBe(0);
     const envelope = JSON.parse(out.join("")) as { ok: boolean; command: string; exitCode: number; data: { base: string; profile: string; version: string; cliVersion: string; sync: unknown } };
     expect(envelope).toMatchObject({ ok: true, command: "init", exitCode: 0 });
-    expect(envelope.data).toMatchObject({ base: "base", profile: "n4", version: "1.4.0", sync: null });
+    expect(envelope.data).toMatchObject({ base: "base", profile: "nuxt-4", version: "1.4.0", sync: null });
     // Regression: the pin used to fall back to the CLI's own release.
     expect(envelope.data.version).not.toBe(envelope.data.cliVersion);
   });

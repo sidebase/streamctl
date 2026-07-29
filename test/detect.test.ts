@@ -12,8 +12,8 @@ function nuxtManifest(): PayloadManifest {
     presets: ["nuxt-app"],
     defaultBase: "nuxt-app",
     profiles: [
-      { name: "n3", detect: { dependency: "nuxt", majorIs: 3 } },
-      { name: "n4", detect: { dependency: "nuxt", majorIs: 4 } },
+      { name: "nuxt-3", detect: { dependency: "nuxt", majorIs: 3 } },
+      { name: "nuxt-4", detect: { dependency: "nuxt", majorIs: 4 } },
     ],
   };
 }
@@ -53,19 +53,19 @@ describe("parseMajor", () => {
 });
 
 describe("detectProfile", () => {
-  it("detects n4 from nuxt ^4.2.0 in devDependencies, and says where it looked", () => {
+  it("detects nuxt-4 from nuxt ^4.2.0 in devDependencies, and says where it looked", () => {
     const result = detectProfile(nuxtManifest(), { devDependencies: { nuxt: "^4.2.0" } });
-    expect(result).toEqual({ profile: "n4", evidence: "nuxt ^4.2.0 in devDependencies" });
+    expect(result).toEqual({ profile: "nuxt-4", evidence: "nuxt ^4.2.0 in devDependencies" });
   });
 
-  it("detects n3 from a plain dependency", () => {
+  it("detects nuxt-3 from a plain dependency", () => {
     const result = detectProfile(nuxtManifest(), { dependencies: { nuxt: "^3.8.0" } });
-    expect(result).toEqual({ profile: "n3", evidence: "nuxt ^3.8.0 in dependencies" });
+    expect(result).toEqual({ profile: "nuxt-3", evidence: "nuxt ^3.8.0 in dependencies" });
   });
 
   it("prefers devDependencies when both declare the dependency", () => {
     const result = detectProfile(nuxtManifest(), { dependencies: { nuxt: "^3.0.0" }, devDependencies: { nuxt: "^4.0.0" } });
-    expect(result).toEqual({ profile: "n4", evidence: "nuxt ^4.0.0 in devDependencies" });
+    expect(result).toEqual({ profile: "nuxt-4", evidence: "nuxt ^4.0.0 in devDependencies" });
   });
 
   it("returns null when the dependency is absent", () => {
@@ -95,26 +95,26 @@ describe("detectProfile", () => {
       schemaVersion: 2,
       presets: ["app"],
       defaultBase: "app",
-      profiles: [{ name: "manual" }, { name: "n4", detect: { dependency: "nuxt", majorIs: 4 } }],
+      profiles: [{ name: "manual" }, { name: "nuxt-4", detect: { dependency: "nuxt", majorIs: 4 } }],
     };
-    expect(detectProfile(manifest, { devDependencies: { nuxt: "^4.0.0" } }).profile).toBe("n4");
+    expect(detectProfile(manifest, { devDependencies: { nuxt: "^4.0.0" } }).profile).toBe("nuxt-4");
   });
 });
 
 describe("profileMismatchWarning", () => {
   it("warns when the detected profile disagrees with the configured one", () => {
-    const warning = profileMismatchWarning(nuxtManifest(), { devDependencies: { nuxt: "^3.0.0" } }, "n4");
-    expect(warning).toContain("\"n4\"");
-    expect(warning).toContain("\"n3\"");
+    const warning = profileMismatchWarning(nuxtManifest(), { devDependencies: { nuxt: "^3.0.0" } }, "nuxt-4");
+    expect(warning).toContain("\"nuxt-4\"");
+    expect(warning).toContain("\"nuxt-3\"");
     expect(warning).toContain("nuxt ^3.0.0");
   });
 
   it("stays quiet when detection agrees with the config", () => {
-    expect(profileMismatchWarning(nuxtManifest(), { devDependencies: { nuxt: "^4.0.0" } }, "n4")).toBeNull();
+    expect(profileMismatchWarning(nuxtManifest(), { devDependencies: { nuxt: "^4.0.0" } }, "nuxt-4")).toBeNull();
   });
 
   it("is silent when detection finds nothing", () => {
-    expect(profileMismatchWarning(nuxtManifest(), {}, "n4")).toBeNull();
+    expect(profileMismatchWarning(nuxtManifest(), {}, "nuxt-4")).toBeNull();
   });
 });
 
