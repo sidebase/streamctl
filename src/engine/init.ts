@@ -6,7 +6,7 @@ import type { SyncDecider, SyncPreview, SyncResult } from "./sync";
 import type { LatestVersionProbe, VersionExistsProbe } from "./versions";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { resolveConfigFile } from "../config/resolve";
+import { CONFIG_FILE, resolveConfigFile } from "../config/resolve";
 import { validateStreamctlConfigWithKeys } from "../config/validate";
 import { StreamctlError } from "../errors";
 import { stderrLogger } from "../logger";
@@ -186,7 +186,10 @@ function renderConfigTemplate(template: string, values: { package: string; base:
 }
 
 async function scaffoldConfig(cwd: string, template: string, values: { package: string; base: string; version: string; profile: string }): Promise<void> {
-  await atomicWrite(join(cwd, "streamctl.config.ts"), renderConfigTemplate(template, values));
+  // Bound to the constant, not spelled out: `resolve.ts` is the single authority on
+  // where a config lives, and a literal here would let `init` scaffold a file the
+  // resolver no longer looks for.
+  await atomicWrite(join(cwd, `${CONFIG_FILE}.ts`), renderConfigTemplate(template, values));
 }
 
 /** `from === null` when the pin is newly added. */

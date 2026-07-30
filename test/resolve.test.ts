@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { SUPPORTED_EXTENSIONS } from "c12";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONFIG_FILE, configCandidates, LEGACY_CONFIG_FILE, resolveConfigFile } from "../src/config/resolve";
+import { captureStderr } from "./helpers/streams";
 
 /**
  * Does `chmod 0o000` on a directory actually revoke traversal here? Windows can't
@@ -43,6 +44,10 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // This file has no other spies, but `captureStderr` installs one and vitest is not
+  // configured with `restoreMocks`, so without this the stub leaks into every later
+  // test in the file and swallows output silently.
+  vi.restoreAllMocks();
   await rm(root, { recursive: true, force: true });
 });
 
@@ -134,10 +139,17 @@ describe("resolveConfigFile", () => {
     });
 
     it("emits nothing when no logger is passed", async () => {
+      // Both channels, because each is blind to the other's failure. `warnings` is the
+      // injected array, which stays empty under `(logger ?? stderrLogger).warn(...)` —
+      // that writes past it to the real stream. The capture is what sees the house
+      // default, and the house default is the deviation this test exists to guard.
+      const stderr = captureStderr();
+
       const location = await resolveConfigFile(root);
 
       expect(location?.source).toBe("root");
       expect(warnings).toEqual([]);
+      expect(stderr.join("")).toBe("");
     });
 
     it("evaluates neither config module", async () => {
