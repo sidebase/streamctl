@@ -67,12 +67,19 @@ describe("both config locations present", () => {
     expect(process.exitCode).toBe(0);
 
     // stdout is the envelope and nothing else: it must still parse, and must not carry
-    // the warning text. A `console.warn` in the resolver would break both.
+    // the warning text.
     const envelope = JSON.parse(stdout.join("")) as { ok: boolean; data: { payload: { pinned: string } } };
     expect(envelope.ok).toBe(true);
     expect(stdout.join("")).not.toContain("streamctl:");
 
     // Exactly one warning, naming both paths. Substrings only — Q1's wording is open.
+    //
+    // This length assertion, not the stdout ones above, is what a `console.warn` in the
+    // resolver would break: `console.warn` goes to stderr, so stdout stays clean either
+    // way. And it only catches it because vitest intercepts `console`, bypassing the
+    // `process.stderr.write` spy — in production `console.warn` does reach stderr. So
+    // this is a harness artifact, not evidence that `console.*` in the resolver is
+    // caught. The `Logger` seam is enforced by review, not by this test.
     const lines = stderr.join("").split("\n").filter(line => line.length > 0);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("streamctl.config.ts");
