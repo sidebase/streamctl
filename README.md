@@ -229,9 +229,8 @@ Nothing under `.config/` is read. Both locations accept any extension c12 suppor
 If one location holds two of them, **`.js` wins over `.ts`** — that is c12's own
 precedence order, and it is the reverse of what most people expect, so `streamctl`
 warns on stderr that the `.ts` is *shadowed by* the `.js`, naming the file it actually
-read. Only the location in use is checked:
-if a root config exists, a collision inside `.streamctl/` is not reported, because
-nothing there is read either way.
+read. Only the location in use is checked: if a root config exists, a collision inside
+`.streamctl/` is not reported, because nothing there is read either way.
 
 Moving an existing config is a plain `git mv .streamctl/config.ts streamctl.config.ts`
 and nothing else — every command behaves identically either way. `status` is the case

@@ -119,12 +119,16 @@ describe("two extensions at one location", () => {
 
     expect(process.exitCode).toBe(0);
 
-    const envelope = JSON.parse(stdout.join("")) as { ok: boolean; data: { warnings?: unknown[] } };
+    const envelope = JSON.parse(stdout.join("")) as { ok: boolean };
     expect(envelope.ok).toBe(true);
+    // Whole envelope, not a named field: `status` has no `warnings[]` -- that is
+    // `SyncResult`'s, reaching the envelopes of `sync` and `check` -- so probing
+    // `data.warnings` here would guess a shape this command does not have and miss a leak
+    // landing anywhere else. This also catches what the prefix check below cannot:
+    // `collectShadowWarnings` writes *without* the `streamctl: ` prefix, so a shadow
+    // notice routed into the report would carry no prefix to match on.
+    expect(stdout.join("")).not.toContain("shadowed");
     expect(stdout.join("")).not.toContain("streamctl:");
-    // Not the report's `warnings[]` either, which is a separate channel that does reach
-    // the envelope -- `collectShadowWarnings` writes there, and this deliberately does not.
-    expect(JSON.stringify(envelope.data.warnings ?? [])).not.toContain("shadowed");
 
     const lines = stderr.join("").split("\n").filter(line => line.length > 0);
     expect(lines).toHaveLength(1);
