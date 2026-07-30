@@ -92,7 +92,20 @@ export const managedFileSchema = z.strictObject({
   // Normalization also leaves a leading `..` in place, so the `..` check keeps firing on
   // the raw path; a doubly-bad path simply collects two issues, which is why this is not
   // an early return.
-  const reserved = posix.normalize(file.path);
+  //
+  // Lowercased deliberately, and shared by all three reservations below. macOS defaults to
+  // a case-insensitive filesystem and Windows is always case-insensitive, so `PACKAGE.JSON`
+  // and `.STREAMCTL/config.ts` name the reserved files there — managing one would have
+  // `sync` overwrite the file the same run wrote. All comparands are lowercase.
+  //
+  // This over-rejects on Linux, where `STREAMCTL.CONFIG.TS` really is a different file:
+  // accepted, because a manifest is portable and must validate identically everywhere. A
+  // platform-conditional check would make a payload valid on CI and invalid on a laptop.
+  //
+  // `toLowerCase`, never `toLocaleLowerCase`: the locale-aware form maps `I` to dotless
+  // `ı` under a Turkish locale, which would un-reserve `STREAMCTL.CONFIG.TS` for exactly
+  // those users.
+  const reserved = posix.normalize(file.path).toLowerCase();
   // `package.json` is owned by the version reconcile (writes it last from a pre-write
   // snapshot); managing it as a file too would let the reconcile silently clobber that write.
   if (reserved === "package.json") {
