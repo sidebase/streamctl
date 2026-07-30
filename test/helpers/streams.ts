@@ -6,6 +6,18 @@ import { vi } from "vitest";
  * read the writes back. The later `vi.spyOn` replaces the earlier stub, and
  * `vi.restoreAllMocks()` in `afterEach` undoes both.
  *
+ * **Sees `process.stdout`/`process.stderr.write` and nothing else.** `console.*` is
+ * intercepted by vitest before it reaches the stream, a child process's inherited stdio
+ * bypasses it, and so does a raw `fs.writeSync(2, …)`. So an "asserts nothing was
+ * written" test is only as strong as the rule that `src/` never calls `console.*`
+ * directly — true today (`rg 'console\.(error|warn|log)' src/` returns nothing) and the
+ * reason every diagnostic goes through `Logger`. If that rule ever slips, these
+ * assertions stop guarding without failing.
+ *
+ * A caller also needs `vi.restoreAllMocks()` in its own `afterEach`: vitest is not
+ * configured with `restoreMocks`, so the stub otherwise leaks into every later test in
+ * the file and swallows output silently.
+ *
  * `test/init.command.test.ts:12-20` duplicates `captureStdout` rather than importing it,
  * deliberately: that file is a regression witness for this feature and has to stay
  * untouched across the whole branch, so even adding this note to it would break the
