@@ -255,6 +255,12 @@ describe("resolveConfigFile", () => {
       // `.streamctl/config` ends in `/config` (no dot), survives the `.replace`, and
       // c12 probes `.config/.streamctl/config`. Removing it is intentional and is
       // called out in the release notes (P03-T03).
+      //
+      // This case guards a *different* regression than the other four: measured, it
+      // still passes if the root spelling is delegated to `loadConfig`, because the
+      // root spelling never probes this path. Only delegating the legacy spelling
+      // re-admits it. A refactor touching just the legacy path would leave the other
+      // four green and fail only here — do not dismiss that as a flake.
       await writeConfigDirFile(join(".streamctl", "config.ts"));
 
       expect(await resolveConfigFile(root, logger)).toBeNull();
