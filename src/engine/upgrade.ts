@@ -1,3 +1,4 @@
+import type { ConfigFileLocation } from "../config/resolve";
 import type { StreamctlConfig } from "../config/types";
 import type { Logger } from "../logger";
 import type { ConfigKeyType } from "../manifest/schema";
@@ -97,9 +98,9 @@ interface FileSnapshot {
 }
 
 /**
- * Move the `.streamctl/config.ts > version` pin in place. Line-anchored so a suffix
- * key (`myversion:`), a `versionSync:` sibling, or a commented-out pin cannot be
- * mistaken for the real one.
+ * Move the resolved config's `version` pin in place, at whichever location the run
+ * loaded it from. Line-anchored so a suffix key (`myversion:`), a `versionSync:`
+ * sibling, or a commented-out pin cannot be mistaken for the real one.
  *
  * The pin is chosen by indentation, not document order: the streamctl pin is
  * top-level and therefore the shallowest `version:` line, while a payload knob like
@@ -110,11 +111,10 @@ interface FileSnapshot {
  *
  * Matched rather than parsed; the config is TS and full TS parsing is out of scope.
  */
-async function bumpConfigVersion(cwd: string, toVersion: string): Promise<void> {
-  const abs = join(cwd, ".streamctl", "config.ts");
-  const raw = await readFileOrNull(abs);
+async function bumpConfigVersion(location: ConfigFileLocation, toVersion: string): Promise<void> {
+  const raw = await readFileOrNull(location.abs);
   if (raw === null) {
-    throw new StreamctlError("CONFIG_INVALID", "`.streamctl/config.ts` not found.", { path: ".streamctl/config.ts" });
+    throw new StreamctlError("CONFIG_INVALID", `\`${location.rel}\` not found.`, { path: location.rel });
   }
   // Horizontal whitespace only in the indent capture. `\s*` would span newlines:
   // under `/m` the `^` also asserts at a blank line, and a greedy `\s*` then eats the
@@ -128,8 +128,8 @@ async function bumpConfigVersion(cwd: string, toVersion: string): Promise<void> 
   if (matches.length === 0) {
     throw new StreamctlError(
       "CONFIG_INVALID",
-      "Could not find a `version: \"…\"` pin on its own line in .streamctl/config.ts to bump.",
-      { path: ".streamctl/config.ts" },
+      `Could not find a \`version: "…"\` pin on its own line in ${location.rel} to bump.`,
+      { path: location.rel },
     );
   }
 
@@ -140,8 +140,8 @@ async function bumpConfigVersion(cwd: string, toVersion: string): Promise<void> 
   if (outermost.length > 1) {
     throw new StreamctlError(
       "CONFIG_INVALID",
-      `Ambiguous version pin in .streamctl/config.ts: ${outermost.length} \`version:\` keys share the outermost indentation, so the streamctl pin cannot be identified. Leave exactly one \`version:\` at the top level of the exported config.`,
-      { path: ".streamctl/config.ts" },
+      `Ambiguous version pin in ${location.rel}: ${outermost.length} \`version:\` keys share the outermost indentation, so the streamctl pin cannot be identified. Leave exactly one \`version:\` at the top level of the exported config.`,
+      { path: location.rel },
     );
   }
 
@@ -149,7 +149,7 @@ async function bumpConfigVersion(cwd: string, toVersion: string): Promise<void> 
   // file-wide replace did. The callback form keeps `$`-patterns in `toVersion` literal.
   const matched = raw.slice(target.index, target.index + target[0].length);
   const bumped = matched.replace(/(["'])[^"']*(["'])$/, (_match: string, open: string, close: string) => `${open}${toVersion}${close}`);
-  await atomicWrite(abs, raw.slice(0, target.index) + bumped + raw.slice(target.index + target[0].length));
+  await atomicWrite(location.abs, raw.slice(0, target.index) + bumped + raw.slice(target.index + target[0].length));
 }
 
 /**
@@ -318,8 +318,8 @@ async function previewSync(opts: RunUpgradeOptions, config: StreamctlConfig, onP
  * The only command that moves the pinned version forward, and it does so
  * transactionally: either it fully applies or it restores the exact pre-upgrade tree.
  *
- * Three files are snapshotted, since a failed run could leave them inconsistent:
- * `.streamctl/config.ts`, `package.json`, and the detected PM's lockfile. The pin is
+ * Three files are snapshotted, since a failed run could leave them inconsistent: the
+ * resolved config (root or legacy), `package.json`, and the detected PM's lockfile. The pin is
  * validated and written before install so a failed install rolls back cleanly, and
  * `runSync` writes nothing until its batch is clean, which doubles as the preflight.
  *
@@ -331,9 +331,9 @@ async function previewSync(opts: RunUpgradeOptions, config: StreamctlConfig, onP
 export async function runUpgrade(opts: RunUpgradeOptions): Promise<UpgradeResult> {
   const { cwd, dryRun } = opts;
 
-  // Phase 2 also destructures `location` here, for the snapshot and the pin bump; both
-  // still use the hardcoded literal.
-  const { config } = await loadStreamctlConfig(cwd, { logger: opts.logger });
+  // `location` feeds both config touch points below — the rollback snapshot and the pin
+  // bump — so the run can only ever write the file it read.
+  const { config, location } = await loadStreamctlConfig(cwd, { logger: opts.logger });
   const fromVersion = config.version;
 
   // A payload pinned via a local override (a package-manager `overrides` entry
@@ -428,9 +428,11 @@ export async function runUpgrade(opts: RunUpgradeOptions): Promise<UpgradeResult
   // to create one at `cwd`, which the rollback then removes.
   const lockfileAbs = findLockfile(cwd, pm.lockfile) ?? join(cwd, pm.lockfile);
   const snapshots = await Promise.all([
-    // POSIX literal rather than join(): `rel` doubles as the user-facing label in the
-    // ROLLBACK_FAILED report, and repo-relative paths are POSIX everywhere.
-    snapshotFile(cwd, ".streamctl/config.ts"),
+    // Both halves come from the resolver, so the snapshot is bound to the file that was
+    // actually loaded rather than to a path re-derived from `cwd`. `location.rel` is
+    // already POSIX-normalized at the source, which it must be: it doubles as the
+    // user-facing label in the ROLLBACK_FAILED report and as the git pathspec there.
+    snapshotAbs(location.abs, location.rel),
     snapshotFile(cwd, "package.json"),
     // Labeled relative to `cwd` (so `../pnpm-lock.yaml` above a package dir): the
     // label is also the pathspec in the report's `git checkout HEAD -- …` command,
@@ -493,7 +495,7 @@ export async function runUpgrade(opts: RunUpgradeOptions): Promise<UpgradeResult
   try {
     // Config pin first (throws CONFIG_INVALID if no bumpable pin exists), before
     // `package.json` is touched.
-    await bumpConfigVersion(cwd, toVersion);
+    await bumpConfigVersion(location, toVersion);
     const dependencyBumps = await bumpDevDeps(cwd, { [newConfig.package]: toVersion }, true);
     const outcome = await runInstaller(opts.install, cwd);
 

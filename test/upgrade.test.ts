@@ -49,7 +49,7 @@ async function makeConfigPackage(version: string): Promise<void> {
   }
 }
 
-const writeConfig = (content: string): Promise<void> => writeFile(join(repo, ".streamctl", "config.ts"), content);
+const writeConfig = (content: string): Promise<void> => writeFile(join(repo, "streamctl.config.ts"), content);
 
 /** A clean initialized repo pinned to FROM (config.ts + devDeps at FROM). */
 async function makeRepo(): Promise<void> {
@@ -63,7 +63,6 @@ async function makeRepo(): Promise<void> {
     join(repo, "package.json"),
     `${JSON.stringify({ name: "app", packageManager: "npm@10.0.0", devDependencies: { "@acme/payload": FROM, "@sidebase/streamctl": FROM } }, null, 2)}\n`,
   );
-  await mkdir(join(repo, ".streamctl"), { recursive: true });
   await writeConfig(`export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
 }
 
@@ -84,7 +83,7 @@ function baseOpts(overrides: Partial<RunUpgradeOptions> = {}): RunUpgradeOptions
 async function readPkg(): Promise<{ devDependencies: Record<string, string> }> {
   return JSON.parse(await readFile(join(repo, "package.json"), "utf8"));
 }
-const readConfig = (): Promise<string> => readFile(join(repo, ".streamctl", "config.ts"), "utf8");
+const readConfig = (): Promise<string> => readFile(join(repo, "streamctl.config.ts"), "utf8");
 
 /** sha256 of a repo-relative file, `null` when absent. The byte-identity oracle for rollback tests. */
 async function hashFile(rel: string): Promise<string | null> {
@@ -95,7 +94,7 @@ async function hashFile(rel: string): Promise<string | null> {
 /** Snapshot the three transactional files (config.ts, package.json, lockfile) as hashes. */
 async function hashSnapshot(lockfile = "package-lock.json"): Promise<Record<string, string | null>> {
   return {
-    config: await hashFile(".streamctl/config.ts"),
+    config: await hashFile("streamctl.config.ts"),
     pkg: await hashFile("package.json"),
     lock: await hashFile(lockfile),
   };
@@ -226,7 +225,7 @@ describe("runUpgrade", () => {
   });
 
   it("NOT_INITIALIZED on a config-less repo", async () => {
-    await rm(join(repo, ".streamctl"), { recursive: true, force: true });
+    await rm(join(repo, "streamctl.config.ts"), { force: true });
     const error = await runUpgrade(baseOpts()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StreamctlError);
     expect((error as StreamctlError).code).toBe("NOT_INITIALIZED");
@@ -288,7 +287,7 @@ describe("runUpgrade", () => {
     // never existed, so the failed install's damage to the REAL lockfile would
     // survive a rollback that reported success.
     const pkgDir = join(repo, "packages", "app");
-    await mkdir(join(pkgDir, ".streamctl"), { recursive: true });
+    await mkdir(pkgDir, { recursive: true });
     await writeFile(join(repo, ".git"), "gitdir: ../elsewhere\n");
     const rootLock = join(repo, "pnpm-lock.yaml");
     await writeFile(rootLock, "lockfileVersion: 9\n# pinned to 1.0.0\n");
@@ -296,7 +295,7 @@ describe("runUpgrade", () => {
       join(pkgDir, "package.json"),
       `${JSON.stringify({ name: "app", packageManager: "pnpm@10.28.1", devDependencies: { "@acme/payload": FROM, "@sidebase/streamctl": FROM } }, null, 2)}\n`,
     );
-    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
+    await writeFile(join(pkgDir, "streamctl.config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
 
     const before = await readFile(rootLock, "utf8");
     const install = vi.fn(async () => {
@@ -317,14 +316,14 @@ describe("runUpgrade", () => {
     // `git checkout HEAD -- <path>` command. Git pathspecs resolve against cwd, so
     // a `../`-style label stays copy-pasteable from the package dir.
     const pkgDir = join(repo, "packages", "app");
-    await mkdir(join(pkgDir, ".streamctl"), { recursive: true });
+    await mkdir(pkgDir, { recursive: true });
     await writeFile(join(repo, ".git"), "gitdir: ../elsewhere\n");
     await writeFile(join(repo, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
     await writeFile(
       join(pkgDir, "package.json"),
       `${JSON.stringify({ name: "app", packageManager: "pnpm@10.28.1", devDependencies: { "@acme/payload": FROM, "@sidebase/streamctl": FROM } }, null, 2)}\n`,
     );
-    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
+    await writeFile(join(pkgDir, "streamctl.config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
 
     const install = vi.fn(async () => {
       // Dirty the lockfile, or the restore is a no-op and never reports a failure.
@@ -349,13 +348,13 @@ describe("runUpgrade", () => {
     // to cwd. The install then writes the ROOT lockfile, which the snapshot could not
     // have predicted, so it has to be swept rather than restored.
     const pkgDir = join(repo, "packages", "app");
-    await mkdir(join(pkgDir, ".streamctl"), { recursive: true });
+    await mkdir(pkgDir, { recursive: true });
     await writeFile(join(repo, ".git"), "gitdir: ../elsewhere\n");
     await writeFile(
       join(pkgDir, "package.json"),
       `${JSON.stringify({ name: "app", packageManager: "pnpm@10.28.1", devDependencies: { "@acme/payload": FROM, "@sidebase/streamctl": FROM } }, null, 2)}\n`,
     );
-    await writeFile(join(pkgDir, ".streamctl", "config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
+    await writeFile(join(pkgDir, "streamctl.config.ts"), `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`);
     const rootLock = join(repo, "pnpm-lock.yaml");
 
     const install = vi.fn(async () => {
@@ -459,7 +458,7 @@ describe("runUpgrade", () => {
     expect((error as StreamctlError).code).toBe("ROLLBACK_FAILED");
 
     const details = (error as StreamctlError).details as { failed: string[]; recover: string; perFile: string[] };
-    expect(details.failed).toEqual(expect.arrayContaining([".streamctl/config.ts", "package.json"]));
+    expect(details.failed).toEqual(expect.arrayContaining(["streamctl.config.ts", "package.json"]));
     expect(details.recover).toContain("git checkout HEAD --");
     expect(details.perFile.some(line => line.includes("FAILED"))).toBe(true);
   });
@@ -946,7 +945,7 @@ describe("runUpgrade: interrupt signal handling", () => {
 
     expect(capturedSignal).toBe("SIGINT");
     expect(abortCount).toBe(1); // second signal ignored
-    expect(capturedStatuses?.map(s => s.path).sort()).toEqual([".streamctl/config.ts", "package-lock.json", "package.json"]);
+    expect(capturedStatuses?.map(s => s.path).sort()).toEqual(["package-lock.json", "package.json", "streamctl.config.ts"]);
     expect(capturedStatuses?.every(s => s.ok)).toBe(true);
     expect(await hashSnapshot()).toEqual(before);
     expect(await readConfig()).toContain(`version: "${FROM}"`);
@@ -958,5 +957,73 @@ describe("runUpgrade: interrupt signal handling", () => {
     await runUpgrade(baseOpts());
     expect(process.listenerCount("SIGINT")).toBe(before.int);
     expect(process.listenerCount("SIGTERM")).toBe(before.term);
+  });
+});
+
+/**
+ * A legacy repo keeps its config at `.streamctl/config.ts`, and `upgrade` must act on
+ * that file rather than on the root path it would write today. Every assertion here is
+ * on file **content or hash**, never on reported restore status: `restoreFile` returns
+ * `{ action: "unchanged", ok: true }` for a path that never existed, so a status-based
+ * assertion passes in exactly the broken case these tests exist to catch.
+ */
+describe("runUpgrade: legacy config location", () => {
+  const legacyRel = ".streamctl/config.ts";
+  const legacyConfig = `export default {\n  package: "@acme/payload",\n  base: "base",\n  version: "${FROM}",\n  profile: "nuxt-4",\n};\n`;
+
+  /** Move this repo's config from the root to the legacy location. */
+  async function useLegacyConfig(): Promise<void> {
+    await rm(join(repo, "streamctl.config.ts"), { force: true });
+    await mkdir(join(repo, ".streamctl"), { recursive: true });
+    await writeFile(join(repo, legacyRel), legacyConfig);
+  }
+
+  const readLegacyConfig = (): Promise<string> => readFile(join(repo, legacyRel), "utf8");
+
+  it("moves the pin inside the legacy file", async () => {
+    await useLegacyConfig();
+
+    const result = await runUpgrade(baseOpts());
+
+    expect(result.toVersion).toBe(TO);
+    expect(await readLegacyConfig()).toContain(`version: "${TO}"`);
+    // The root path must not be created as a side effect of the bump.
+    expect(existsSync(join(repo, "streamctl.config.ts"))).toBe(false);
+  });
+
+  it("restores the legacy file byte-for-byte after a failed install", async () => {
+    await useLegacyConfig();
+    const before = await hashFile(legacyRel);
+    const install = vi.fn(async () => {
+      throw new Error("install boom");
+    });
+
+    const error = await runUpgrade(baseOpts({ install })).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(StreamctlError);
+    // The hash is the oracle: the bump advanced the pin to TO, so an unrestored file
+    // hashes differently. A rollback that "succeeded" without writing fails here.
+    expect(await hashFile(legacyRel)).toBe(before);
+    expect(await readLegacyConfig()).toContain(`version: "${FROM}"`);
+    expect(await readLegacyConfig()).not.toContain(`version: "${TO}"`);
+  });
+
+  it("ROLLBACK_FAILED names the legacy path, not the root one", async () => {
+    await useLegacyConfig();
+    const install = vi.fn(async () => {
+      throw new Error("install boom");
+    });
+    const restoreWrite = vi.fn(async () => {
+      throw new Error("disk full");
+    });
+
+    const error = await runUpgrade(baseOpts({ install, restoreWrite })).catch((e: unknown) => e);
+
+    expect((error as StreamctlError).code).toBe("ROLLBACK_FAILED");
+    const details = (error as StreamctlError).details as { failed: string[]; recover: string };
+    expect(details.failed).toContain(legacyRel);
+    expect(details.failed).not.toContain("streamctl.config.ts");
+    // The label doubles as the git pathspec in the recovery command.
+    expect(details.recover).toContain(legacyRel);
   });
 });
