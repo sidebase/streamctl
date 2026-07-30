@@ -995,11 +995,17 @@ describe("runUpgrade: legacy config location", () => {
     //
     // These four tests cannot detect a `bumpConfigVersion` hardcoded to the legacy path
     // (see the comment on `writeConfig`); the root-repo tests above are what can, and
-    // only while the default fixture stays at the root. Relocating that default is
-    // survivable in a way that looks fine: a careless flip reds ~28 tests here, but a
-    // thorough one leaves a handful of path-detail assertions whose obvious fix is to
-    // update the path — after which the suite is green and the guard is gone. This
-    // assertion is the step in that sequence that says so, by name.
+    // only while the default fixture stays at the root.
+    //
+    // Do not expect to notice if you move it. Measured: a *faithful* relocation — this
+    // helper, `readConfig`, `hashSnapshot`, the `NOT_INITIALIZED` teardown, the `pkgDir`
+    // blocks and the three path-detail expectations, all handled properly — is 57/57
+    // green on the first run with this assertion removed, and a full `P02-T02` revert on
+    // top of that is *also* 57/57 green. There is no red stage to catch it at: the path
+    // details are part of doing the relocation correctly, not a warning that something
+    // is wrong. This assertion is the only thing between a competent fixture move and
+    // total loss of that guard, which is why it earns its place despite proving nothing
+    // about the product.
     //
     // No `force` on the `rm` either: without it, a moved default no-ops silently here.
     expect(existsSync(join(repo, `${CONFIG_FILE}.ts`)), "the default fixture must stay at the root").toBe(true);
