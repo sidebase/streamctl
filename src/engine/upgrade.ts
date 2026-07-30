@@ -331,7 +331,9 @@ async function previewSync(opts: RunUpgradeOptions, config: StreamctlConfig, onP
 export async function runUpgrade(opts: RunUpgradeOptions): Promise<UpgradeResult> {
   const { cwd, dryRun } = opts;
 
-  const config = await loadStreamctlConfig(cwd);
+  // Phase 2 also destructures `location` here, for the snapshot and the pin bump; both
+  // still use the hardcoded literal.
+  const { config } = await loadStreamctlConfig(cwd, { logger: opts.logger });
   const fromVersion = config.version;
 
   // A payload pinned via a local override (a package-manager `overrides` entry

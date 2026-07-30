@@ -39,7 +39,7 @@ export const syncCommand = defineCommand({
     return executeCommand("sync", options.json, async (reporter) => {
       rejectEmptyFlags(args);
       const cwd = process.cwd();
-      const loaded = await loadStreamctlConfig(cwd);
+      const { config: loaded } = await loadStreamctlConfig(cwd, { logger: reporter });
       const config = options.versionSync ? loaded : { ...loaded, versionSync: false };
       const payload = await resolvePayload(cwd, config.package, config.version);
       await warnProfileMismatch(cwd, payload, config.profile, reporter);

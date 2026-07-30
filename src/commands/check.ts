@@ -34,7 +34,7 @@ export const checkCommand = defineCommand({
         );
       }
       const cwd = process.cwd();
-      const config = await loadStreamctlConfig(cwd);
+      const { config } = await loadStreamctlConfig(cwd, { logger: reporter });
       const payload = await resolvePayload(cwd, config.package, config.version);
       return runCheck(cwd, payload, config, failOn, { logger: reporter });
     });

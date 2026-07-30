@@ -5,7 +5,7 @@ exports[`check --json on an uninitialized repo > emits a well-formed JSON error 
   "command": "check",
   "error": {
     "code": "NOT_INITIALIZED",
-    "message": "No .streamctl/config.ts found in this repo. Run \`streamctl init\` first.",
+    "message": "No streamctl config found (streamctl.config.ts, or a legacy .streamctl/config.ts). Run \`streamctl init\` first.",
   },
   "exitCode": 1,
   "ok": false,
