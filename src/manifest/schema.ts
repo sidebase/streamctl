@@ -1,8 +1,17 @@
 import type { ZodError } from "zod";
 import type { ConfigIssue } from "../config/validate";
+import { posix } from "node:path";
 import { z } from "zod";
 import { RECONCILABLE_KEY_PATTERN } from "../config/types";
 import { isStructuredPath } from "../paths";
+
+/**
+ * Config paths a payload may not manage. Spelled out here rather than imported from
+ * `config/resolve`, so this separately published entry point stays independent of the
+ * loader — the strings are stable and the coupling would buy nothing.
+ */
+const CONFIG_STEM = "streamctl.config";
+const LEGACY_CONFIG_DIR = ".streamctl";
 
 /** A payload declaring any other `schemaVersion` maps to `SCHEMA_UNSUPPORTED`. Manifest and package versions are otherwise independent. */
 export const SUPPORTED_SCHEMA_VERSION = 2;
@@ -70,10 +79,30 @@ export const managedFileSchema = z.strictObject({
   if (file.path.split("/").includes("..")) {
     ctx.addIssue({ code: "custom", path: ["path"], message: "must not contain \"..\" segments" });
   }
+  // Reservations below compare against the normalized path, because `./x`, `.//x` and
+  // `././x` all reach disk as `join(cwd, path)` — the same file a bare `x` names, so an
+  // equality or prefix test on the raw value is trivially bypassed.
+  //
+  // `posix.normalize`, never the platform `normalize`: the latter emits backslashes on
+  // Windows, which the check three lines above rejects. It also leaves a leading `..`
+  // in place, so the `..` check keeps firing on the raw path; a doubly-bad path simply
+  // collects two issues, which is why this is not an early return.
+  const reserved = posix.normalize(file.path);
   // `package.json` is owned by the version reconcile (writes it last from a pre-write
   // snapshot); managing it as a file too would let the reconcile silently clobber that write.
-  if (file.path === "package.json") {
+  if (reserved === "package.json") {
     ctx.addIssue({ code: "custom", path: ["path"], message: "package.json is reconciled via versionSync, not a managed file" });
+  }
+  // The config is written by `init` and rewritten by `upgrade`'s pin bump, which also
+  // snapshots it for rollback; managing it as a file too would have `sync` overwrite the
+  // config the same run just read. Matched by stem so every extension is covered without
+  // this module importing the loader's extension list. Root-level only: the reservation
+  // is for the invocation-directory config, so `nested/streamctl.config.ts` is fine.
+  if (!reserved.includes("/") && reserved.startsWith(`${CONFIG_STEM}.`)) {
+    ctx.addIssue({ code: "custom", path: ["path"], message: `${CONFIG_STEM}.* is written by \`streamctl init\` and rewritten by \`streamctl upgrade\`, not a managed file` });
+  }
+  if (reserved.startsWith(`${LEGACY_CONFIG_DIR}/`)) {
+    ctx.addIssue({ code: "custom", path: ["path"], message: `${LEGACY_CONFIG_DIR}/ holds the legacy streamctl config, which \`streamctl upgrade\` rewrites; it cannot hold managed files` });
   }
   if (file.strategy === "block" && file.blockMark === undefined) {
     ctx.addIssue({ code: "custom", path: ["blockMark"], message: "is required when strategy is \"block\"" });

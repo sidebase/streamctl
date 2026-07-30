@@ -101,6 +101,54 @@ describe("ManagedFile", () => {
     expect(issuePaths({ ...managedFile(), path: "package.json" }, managedFileSchema)).toContain("path");
   });
 
+  describe("reserved config paths", () => {
+    const reject = (path: string): string[] => issuePaths({ ...managedFile(), path }, managedFileSchema);
+    const accepts = (path: string): boolean => managedFileSchema.safeParse({ ...managedFile(), path }).success;
+
+    it("rejects the root config on any extension", () => {
+      for (const path of ["streamctl.config.ts", "streamctl.config.mjs", "streamctl.config.js", "streamctl.config.mts"]) {
+        expect(reject(path), path).toContain("path");
+      }
+    });
+
+    it("rejects anything under the legacy directory", () => {
+      expect(reject(".streamctl/config.ts")).toContain("path");
+      expect(reject(".streamctl/notes.md")).toContain("path");
+    });
+
+    // `./x`, `.//x` and `././x` all reach disk as the same file a bare `x` names, so a
+    // guard that only tests the raw string is bypassed by typing a prefix.
+    it("rejects `./`-prefixed spellings of every reservation", () => {
+      for (const path of [
+        "./streamctl.config.ts",
+        ".//streamctl.config.ts",
+        "././streamctl.config.ts",
+        "./.streamctl/config.ts",
+        ".//.streamctl/config.ts",
+        "./package.json",
+        ".//package.json",
+      ]) {
+        expect(reject(path), path).toContain("path");
+      }
+    });
+
+    // The failure mode of this guard is over-breadth, not absence: a payload's own
+    // wrapper files live in the same root namespace, and `acme.config.ts` is managed by
+    // the synthetic payload much of the suite depends on.
+    it("still accepts other root-level wrapper configs", () => {
+      for (const path of ["eslint.config.ts", "prisma.config.ts", "acme.config.ts"]) {
+        expect(accepts(path), path).toBe(true);
+      }
+    });
+
+    it("accepts the reserved names outside the invocation directory", () => {
+      expect(accepts("nested/streamctl.config.ts")).toBe(true);
+      // Same stem, different file: only `streamctl.config.<ext>` is reserved.
+      expect(accepts("streamctl.config-guide.md")).toBe(true);
+      expect(accepts("docs/streamctl.config-guide.md")).toBe(true);
+    });
+  });
+
   it("rejects projectFields on a non-merge strategy", () => {
     expect(issuePaths({ ...managedFile(), projectFields: ["x"] }, managedFileSchema)).toContain("projectFields");
   });
