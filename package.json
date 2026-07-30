@@ -53,7 +53,7 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "c12": "^3.0.0",
+    "c12": "^3.2.0",
     "citty": "^0.2.2",
     "defu": "^6.1.4",
     "diff": "^9.0.0",
