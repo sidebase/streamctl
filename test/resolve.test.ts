@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { SUPPORTED_EXTENSIONS } from "c12";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -53,6 +53,13 @@ async function writeRootConfig(ext = ".ts", body = "export default {}\n"): Promi
 async function writeLegacyConfig(ext = ".ts", body = "export default {}\n"): Promise<void> {
   await mkdir(join(root, ".streamctl"), { recursive: true });
   await writeFile(join(root, ".streamctl", `config${ext}`), body);
+}
+
+/** Write a file under `.config/`, creating its parents. */
+async function writeConfigDirFile(rel: string, body = "export default {}\n"): Promise<void> {
+  const abs = join(root, ".config", rel);
+  await mkdir(dirname(abs), { recursive: true });
+  await writeFile(abs, body);
 }
 
 /** A config whose module body touches the filesystem when evaluated. */
@@ -207,6 +214,83 @@ describe("resolveConfigFile", () => {
       const location = await resolveConfigFile(root, logger);
 
       expect(location?.source).toBe("legacy");
+      expect(warnings).toEqual([]);
+    });
+  });
+
+  /**
+   * Characterization tests for a deliberate decision: `90_questions.md`, "What should
+   * happen to c12's `.config/` directory probing? — **Suppress it**" (2026-07-30).
+   *
+   * The exclusion is structural, not checked — confirming an intended candidate exists
+   * before anything loads makes c12's `.config/` branches (`dist/index.mjs:313`)
+   * unreachable. So there is no rejection code to review, and nothing visibly breaks if
+   * a refactor undoes it. These tests are the only guard. A failure here means the
+   * probe-before-load ordering was lost; do not "fix" it by re-admitting `.config/`.
+   */
+  describe(".config/ is deliberately not supported", () => {
+    it("does not resolve .config/streamctl.ts", async () => {
+      // Not a regression: under the pre-change `configFile: ".streamctl/config"` this
+      // never resolved either, because c12 probes `.config/.streamctl/config` and never
+      // `.config/streamctl`. Switching to the root spelling is what *would* have
+      // started resolving it — verified against c12 3.3.4. This prevents that.
+      await writeConfigDirFile("streamctl.ts");
+
+      expect(await resolveConfigFile(root, logger)).toBeNull();
+      expect(warnings).toEqual([]);
+    });
+
+    it("does not resolve .config/streamctl.config.ts", async () => {
+      // Same as above: never resolved before, and would have started under the root
+      // spelling (`.replace(/\.config$/, "")` strips the suffix, so c12 probes
+      // `.config/streamctl`, and its third branch probes `.config/streamctl.config`).
+      await writeConfigDirFile("streamctl.config.ts");
+
+      expect(await resolveConfigFile(root, logger)).toBeNull();
+      expect(warnings).toEqual([]);
+    });
+
+    it("does not resolve .config/.streamctl/config.ts", async () => {
+      // The one real break in this block: this path DOES resolve today, because
+      // `.streamctl/config` ends in `/config` (no dot), survives the `.replace`, and
+      // c12 probes `.config/.streamctl/config`. Removing it is intentional and is
+      // called out in the release notes (P03-T03).
+      await writeConfigDirFile(join(".streamctl", "config.ts"));
+
+      expect(await resolveConfigFile(root, logger)).toBeNull();
+      expect(warnings).toEqual([]);
+    });
+
+    it("resolves the legacy config when .config/streamctl.ts also exists", async () => {
+      // Compatibility, not exclusion, and the most important case here: this repo shape
+      // reads the legacy file today. A design delegating resolution to c12 would have
+      // flipped it to the `.config/` file — a silent behavior change in exactly the
+      // population promised byte-identical behavior.
+      await writeConfigDirFile("streamctl.ts", "export default { base: \"from-config-dir\" }\n");
+      await writeLegacyConfig(".ts", "export default { base: \"from-legacy\" }\n");
+
+      const location = await resolveConfigFile(root, logger);
+
+      expect(location?.source).toBe("legacy");
+      expect(location?.rel).toBe(".streamctl/config.ts");
+      // Read back through the resolved path, so this proves *which* file was selected
+      // rather than merely that something was.
+      expect(await readFile(location?.abs ?? "", "utf8")).toContain("from-legacy");
+      expect(warnings).toEqual([]);
+    });
+  });
+
+  describe("directory-shaped config via c12's /index suffix", () => {
+    it("does not resolve streamctl.config/index.ts", async () => {
+      // A real, intentional divergence: c12 accepts this form via
+      // `suffixes: ["", "/index"]` (`dist/index.mjs:338`) — verified, it loads — and the
+      // probe deliberately does not mirror it, because a directory-shaped config is
+      // outside the two-locations promise. Distinct from the `streamctl.config.ts`-as-a
+      // -directory case above, where the candidate itself is the directory.
+      await mkdir(join(root, "streamctl.config"));
+      await writeFile(join(root, "streamctl.config", "index.ts"), "export default {}\n");
+
+      expect(await resolveConfigFile(root, logger)).toBeNull();
       expect(warnings).toEqual([]);
     });
   });
