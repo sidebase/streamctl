@@ -114,18 +114,25 @@ export async function resolveConfigFile(cwd: string, logger?: Logger): Promise<C
   // here: it could never fire, and a guard that cannot fire reads as protection that is
   // not there.
   //
-  // **The load-bearing property is positional selection**, not candidate distinctness.
-  // `abs` is `matches[0]` and `shadowed` is everything after it, so the winner is
-  // excluded by *where it sits in the list*, whatever it points at. Distinctness is the
-  // weaker reason: it makes the strings unique, but two distinct spellings can be the
-  // same file — a symlinked or hardlinked `streamctl.config.js` and `.ts` alias one
-  // inode, and this stays correct anyway, because position does not care about identity.
+  // Two separate properties hold this up, and they cover different hazards.
   //
-  // So: keep selecting by position. Switching to identity- or set-based selection
-  // (dedupe by realpath, `Set` of matches, `filter(m => m !== abs)`) breaks this while
-  // looking like it preserves the invariant, because the surviving distinctness test
-  // would still pass. That test pins the *precondition* the message quality rests on —
-  // duplicate spellings would name a file as its own shadow — not this property.
+  // 1. **Positional selection** removes *self*-comparison. `abs` is `matches[0]` and
+  //    `shadowed` is everything after it, so the winner is excluded by where it sits in
+  //    the list, whatever it points at. This is stronger than candidate distinctness,
+  //    which is a claim about strings while the hazard is about files. Keep selecting by
+  //    position: switching to identity- or set-based selection (dedupe by realpath, a
+  //    `Set`, `filter(m => m !== abs)`) breaks this while looking like it preserves the
+  //    invariant, because the distinctness test would still pass.
+  //
+  // 2. **Descriptive wording** is what makes *alias*-comparison harmless — and position
+  //    does not help there. `statSync` follows symlinks, so a `streamctl.config.js`
+  //    symlinked to `streamctl.config.ts` passes `isFile` twice and the warning names
+  //    one file as shadowing itself under two paths. Measured, not hypothetical. It is
+  //    only cosmetic because the message *describes* ("Y is the one being read") rather
+  //    than *instructs*: the `shadowedBy` precedent says "port and delete", which in
+  //    this state would tell someone to delete the file their config actually lives in.
+  //    Pinned by the symlink test in `resolve.test.ts`, which asserts the message
+  //    carries no imperative. Do not add one.
   if (shadowed.length > 0) {
     logger?.warn(
       `streamctl: ${shadowed.map(toRel).join(" and ")} ${shadowed.length > 1 ? "are" : "is"} shadowed by ${toRel(abs)}; ${toRel(abs)} is the one being read.`,

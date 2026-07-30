@@ -1,5 +1,5 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -31,6 +31,22 @@ function chmodCanRevokeTraversal(): boolean {
 }
 
 const canRevokeTraversal = chmodCanRevokeTraversal();
+
+/** Can this platform/user create symlinks at all? Windows often cannot. */
+function symlinksSupported(): boolean {
+  const dir = mkdtempSync(join(tmpdir(), "streamctl-symprobe-"));
+  try {
+    writeFileSync(join(dir, "t"), "x");
+    symlinkSync(join(dir, "t"), join(dir, "l"));
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const canSymlink = symlinksSupported();
 
 let root: string;
 let warnings: string[];
@@ -258,6 +274,27 @@ describe("resolveConfigFile", () => {
       // user to delete the only config they have.
       expect(warning).toContain("are shadowed by streamctl.config.js");
       expect(warning.slice(0, warning.indexOf("are shadowed by"))).not.toContain("streamctl.config.js");
+    });
+
+    it.skipIf(!canSymlink)("stays descriptive when the two spellings are one file", async () => {
+      // `statSync` follows symlinks, so both candidates pass `isFile` and the warning
+      // names a single file as shadowing itself under two paths. Cosmetic — but only
+      // because the message describes rather than instructs. The `shadowedBy` precedent
+      // this warning is modelled on says "port and delete <sibling>", which here would
+      // tell someone to delete the file their config actually lives in, leaving a
+      // dangling symlink. Nothing else pins that distinction, so this does.
+      await writeRootConfig(".ts");
+      await symlink(join(root, "streamctl.config.ts"), join(root, "streamctl.config.js"));
+
+      await resolveConfigFile(root, logger);
+
+      const [warning] = warnings;
+      expect(warning).toContain("is the one being read");
+      // The property, not a fixed string: asserting the exact sentence would red on any
+      // rewording and train the next person to update the expectation rather than think.
+      for (const verb of ["delete", "remove", "port", "drop", "move", "rename", "fix", "run"]) {
+        expect(warning.toLowerCase(), verb).not.toMatch(new RegExp(`\\b${verb}\\b`, "u"));
+      }
     });
 
     it("says nothing when one extension exists", async () => {
