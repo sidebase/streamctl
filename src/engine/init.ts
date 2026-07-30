@@ -6,6 +6,7 @@ import type { SyncDecider, SyncPreview, SyncResult } from "./sync";
 import type { LatestVersionProbe, VersionExistsProbe } from "./versions";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { resolveConfigFile } from "../config/resolve";
 import { validateStreamctlConfigWithKeys } from "../config/validate";
 import { StreamctlError } from "../errors";
 import { stderrLogger } from "../logger";
@@ -83,7 +84,7 @@ export interface RunInitOptions {
 export interface InitResult {
   base: string;
   profile: Profile;
-  /** The payload pin written to `.streamctl/config.ts`, never the CLI's own version. */
+  /** The payload pin written to `streamctl.config.ts`, never the CLI's own version. */
   version: string;
   cliVersion: string;
   /** `null` when `--no-install` skipped it. */
@@ -185,7 +186,7 @@ function renderConfigTemplate(template: string, values: { package: string; base:
 }
 
 async function scaffoldConfig(cwd: string, template: string, values: { package: string; base: string; version: string; profile: string }): Promise<void> {
-  await atomicWrite(join(cwd, ".streamctl", "config.ts"), renderConfigTemplate(template, values));
+  await atomicWrite(join(cwd, "streamctl.config.ts"), renderConfigTemplate(template, values));
 }
 
 /** `from === null` when the pin is newly added. */
@@ -317,7 +318,7 @@ async function resolvePayloadVersion(opts: RunInitOptions, overridden: boolean, 
 
 /**
  * Wire a repo to a preset for the first time. Detect the profile, probe registry
- * access unless skipped, scaffold `.streamctl/config.ts`, add the CLI and payload
+ * access unless skipped, scaffold `streamctl.config.ts`, add the CLI and payload
  * devDeps, install so the payload is on disk, then run the first `sync`. The CLI
  * hardcodes no registry.
  *
@@ -330,10 +331,13 @@ export async function runInit(opts: RunInitOptions): Promise<InitResult> {
   if (!existsSync(join(cwd, "package.json"))) {
     throw new StreamctlError("NOT_A_REPO", "No package.json found. Run `streamctl init` at a repository root.");
   }
-  if (existsSync(join(cwd, ".streamctl", "config.ts"))) {
+  // Either location blocks a second init, and the message names the file that is
+  // actually there. No logger: an ambiguity warning would be noise ahead of the failure.
+  const existing = await resolveConfigFile(cwd);
+  if (existing !== null) {
     throw new StreamctlError(
       "ALREADY_INITIALIZED",
-      "`.streamctl/config.ts` already exists. Use `streamctl sync` or `streamctl upgrade`.",
+      `\`${existing.rel}\` already exists. Use \`streamctl sync\` or \`streamctl upgrade\`.`,
     );
   }
 
@@ -444,7 +448,7 @@ export async function runInit(opts: RunInitOptions): Promise<InitResult> {
     config,
     managedFiles,
     baseline,
-    // init just wrote `.streamctl/config.ts` and bumped `package.json` devDeps, so the
+    // init just wrote `streamctl.config.ts` and bumped `package.json` devDeps, so the
     // dirty-tree guard must not refuse its own first sync.
     allowDirty: true,
     decider: yes ? undefined : opts.decider,
