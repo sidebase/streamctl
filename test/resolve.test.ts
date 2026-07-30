@@ -234,9 +234,17 @@ describe("resolveConfigFile", () => {
       // never resolved either, because c12 probes `.config/.streamctl/config` and never
       // `.config/streamctl`. Switching to the root spelling is what *would* have
       // started resolving it — verified against c12 3.3.4. This prevents that.
-      await writeConfigDirFile("streamctl.ts");
+      //
+      // The side-effect body closes a blind spot the `null` assertion alone leaves: a
+      // regression that loads speculatively and *then* rejects `.config/` hits would
+      // still return `null` here, having already executed this file. That is the
+      // strictly-worse design `20_architecture.md` rejects — post-hoc rejection cannot
+      // undo an evaluation, because c12 loads as part of resolving.
+      const sentinel = join(root, "config-dir-evaluated");
+      await writeConfigDirFile("streamctl.ts", sideEffectConfig(sentinel));
 
       expect(await resolveConfigFile(root, logger)).toBeNull();
+      expect(existsSync(sentinel)).toBe(false);
       expect(warnings).toEqual([]);
     });
 
@@ -288,11 +296,13 @@ describe("resolveConfigFile", () => {
 
   describe("directory-shaped config via c12's /index suffix", () => {
     it("does not resolve streamctl.config/index.ts", async () => {
-      // A real, intentional divergence: c12 accepts this form via
-      // `suffixes: ["", "/index"]` (`dist/index.mjs:338`) — verified, it loads — and the
-      // probe deliberately does not mirror it, because a directory-shaped config is
-      // outside the two-locations promise. Distinct from the `streamctl.config.ts`-as-a
-      // -directory case above, where the candidate itself is the directory.
+      // A real, intentional divergence, recorded as deliberate in `20_architecture.md`
+      // ("Resolution strategy" — the one property given up by probe-then-load): c12
+      // accepts this form via `suffixes: ["", "/index"]` (`dist/index.mjs:338`) —
+      // verified, it loads — and the probe does not mirror it, because a directory-shaped
+      // config is outside the two-locations promise. Deleting this test is a spec change,
+      // not a cleanup. Distinct from the `streamctl.config.ts`-as-a-directory case above,
+      // where the candidate itself is the directory.
       await mkdir(join(root, "streamctl.config"));
       await writeFile(join(root, "streamctl.config", "index.ts"), "export default {}\n");
 
