@@ -110,10 +110,22 @@ export async function resolveConfigFile(cwd: string, logger?: Logger): Promise<C
   // been probed, while the cross warning needs both. Pinned by test so the order stays
   // predictable in CI logs rather than following whatever the code happens to do.
   //
-  // `abs` cannot appear in `shadowed`: it is `matches[0]` and the candidates are one
-  // spelling crossed with twelve distinct extensions, so a file can match at most once.
-  // That is why there is no "skip the resolved file" check here — it could never fire.
-  // The precondition is candidate distinctness, which `resolve.test.ts` pins directly.
+  // `abs` cannot appear in `shadowed`, so there is no "skip the resolved file" check
+  // here: it could never fire, and a guard that cannot fire reads as protection that is
+  // not there.
+  //
+  // **The load-bearing property is positional selection**, not candidate distinctness.
+  // `abs` is `matches[0]` and `shadowed` is everything after it, so the winner is
+  // excluded by *where it sits in the list*, whatever it points at. Distinctness is the
+  // weaker reason: it makes the strings unique, but two distinct spellings can be the
+  // same file — a symlinked or hardlinked `streamctl.config.js` and `.ts` alias one
+  // inode, and this stays correct anyway, because position does not care about identity.
+  //
+  // So: keep selecting by position. Switching to identity- or set-based selection
+  // (dedupe by realpath, `Set` of matches, `filter(m => m !== abs)`) breaks this while
+  // looking like it preserves the invariant, because the surviving distinctness test
+  // would still pass. That test pins the *precondition* the message quality rests on —
+  // duplicate spellings would name a file as its own shadow — not this property.
   if (shadowed.length > 0) {
     logger?.warn(
       `streamctl: ${shadowed.map(toRel).join(" and ")} ${shadowed.length > 1 ? "are" : "is"} shadowed by ${toRel(abs)}; ${toRel(abs)} is the one being read.`,
