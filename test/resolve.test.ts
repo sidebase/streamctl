@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { SUPPORTED_EXTENSIONS } from "c12";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONFIG_FILE, configCandidates, LEGACY_CONFIG_FILE, resolveConfigFile } from "../src/config/resolve";
+import { sideEffectConfig } from "./helpers/configs";
 import { captureStderr } from "./helpers/streams";
 
 /**
@@ -65,11 +66,6 @@ async function writeConfigDirFile(rel: string, body = "export default {}\n"): Pr
   const abs = join(root, ".config", rel);
   await mkdir(dirname(abs), { recursive: true });
   await writeFile(abs, body);
-}
-
-/** A config whose module body touches the filesystem when evaluated. */
-function sideEffectConfig(sentinel: string): string {
-  return `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(sentinel)}, "");\nexport default {}\n`;
 }
 
 describe("resolveConfigFile", () => {

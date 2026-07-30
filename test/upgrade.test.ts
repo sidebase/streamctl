@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CONFIG_FILE } from "../src/config/resolve";
 import { extractEmbeddedVersion } from "../src/engine/init";
 import { runUpgrade } from "../src/engine/upgrade";
 import { StreamctlError } from "../src/errors";
@@ -49,7 +50,17 @@ async function makeConfigPackage(version: string): Promise<void> {
   }
 }
 
-const writeConfig = (content: string): Promise<void> => writeFile(join(repo, "streamctl.config.ts"), content);
+/**
+ * The default fixture is at the ROOT, and that is load-bearing — do not relocate it.
+ *
+ * The `runUpgrade: legacy config location` block below cannot detect a `bumpConfigVersion`
+ * hardcoded back to the legacy path: it passes 4/4 under a full revert, including the
+ * byte-for-byte rollback case, because from inside a legacy repo the hash oracle cannot
+ * tell "rollback restored it" from "nothing ever wrote it". Detection comes entirely from
+ * the root-repo tests in this file. Move this to legacy and they stop being able to see
+ * it, while everything here stays green.
+ */
+const writeConfig = (content: string): Promise<void> => writeFile(join(repo, `${CONFIG_FILE}.ts`), content);
 
 /** A clean initialized repo pinned to FROM (config.ts + devDeps at FROM). */
 async function makeRepo(): Promise<void> {
@@ -979,7 +990,20 @@ describe("runUpgrade: legacy config location", () => {
 
   /** Move this repo's config from the root to the legacy location. */
   async function useLegacyConfig(): Promise<void> {
-    await rm(join(repo, "streamctl.config.ts"), { force: true });
+    // Tripwire, not coverage — it can only fail from a deliberate edit, and it proves
+    // nothing about the product. Its job is to turn a silent loss into a loud one.
+    //
+    // These four tests cannot detect a `bumpConfigVersion` hardcoded to the legacy path
+    // (see the comment on `writeConfig`); the root-repo tests above are what can, and
+    // only while the default fixture stays at the root. Relocating that default is
+    // survivable in a way that looks fine: a careless flip reds ~28 tests here, but a
+    // thorough one leaves a handful of path-detail assertions whose obvious fix is to
+    // update the path — after which the suite is green and the guard is gone. This
+    // assertion is the step in that sequence that says so, by name.
+    //
+    // No `force` on the `rm` either: without it, a moved default no-ops silently here.
+    expect(existsSync(join(repo, `${CONFIG_FILE}.ts`)), "the default fixture must stay at the root").toBe(true);
+    await rm(join(repo, `${CONFIG_FILE}.ts`));
     await mkdir(join(repo, ".streamctl"), { recursive: true });
     await writeFile(join(repo, legacyRel), legacyConfig);
   }

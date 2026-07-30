@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -7,6 +7,7 @@ import { loadConfig } from "c12";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadStreamctlConfig } from "../src/config/load";
 import { StreamctlError } from "../src/errors";
+import { sideEffectConfig, VALID_BODY } from "./helpers/configs";
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -43,6 +44,31 @@ describe("loadStreamctlConfig", () => {
     expect(config.versionSyncExclude).toEqual(["devDependencies.typescript"]);
   });
 
+  // The temp-dir tests below already assert `source === "legacy"`. What these two add is
+  // a committed fixture on disk: the layout an adopter actually has, exercised through
+  // the real loader rather than through a directory the test just built.
+  it("loads a committed legacy fixture", async () => {
+    const { config, location } = await loadStreamctlConfig(join(fixtures, "legacy-valid"));
+    expect(config.base).toBe("nuxt-app");
+    expect(location.source).toBe("legacy");
+    expect(location.rel).toBe(".streamctl/config.ts");
+  });
+
+  it("prefers the root config in a committed both-present fixture", async () => {
+    const warnings: string[] = [];
+
+    const { config, location } = await loadStreamctlConfig(join(fixtures, "both-present"), {
+      logger: { warn: message => warnings.push(message) },
+    });
+
+    // The two files differ in `base` and `version`, so these are proof of *which* was
+    // read, not merely that something loaded.
+    expect(config.base).toBe("nuxt-app");
+    expect(config.version).toBe("9.9.9");
+    expect(location.source).toBe("root");
+    expect(warnings).toHaveLength(1);
+  });
+
   it("NOT_INITIALIZED when the config is absent", async () => {
     const error = await loadStreamctlConfig(join(fixtures, "uninitialized")).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StreamctlError);
@@ -74,8 +100,17 @@ describe("loadStreamctlConfig", () => {
   });
 
   describe("location", () => {
-    it("reports the legacy location for a legacy fixture", async () => {
+    it("reports the root location for a root fixture", async () => {
       const cwd = join(fixtures, "valid");
+      const { location } = await loadStreamctlConfig(cwd);
+
+      expect(location.source).toBe("root");
+      expect(location.rel).toBe("streamctl.config.ts");
+      expect(location.abs).toBe(join(cwd, "streamctl.config.ts"));
+    });
+
+    it("reports the legacy location for a legacy fixture", async () => {
+      const cwd = join(fixtures, "legacy-valid");
       const { location } = await loadStreamctlConfig(cwd);
 
       expect(location.source).toBe("legacy");
@@ -90,7 +125,10 @@ describe("loadStreamctlConfig", () => {
       const { _configFile } = await loadConfig({
         cwd,
         name: "streamctl",
-        configFile: ".streamctl/config",
+        // The spelling the loader used for this fixture. Must track the fixture's
+        // location: point it at the other one and c12 resolves nothing, `_configFile`
+        // is undefined, and the comparison below degrades into realpath("") throwing.
+        configFile: "streamctl.config",
         rcFile: false,
         globalRc: false,
         packageJson: false,
@@ -143,6 +181,26 @@ describe("loadStreamctlConfig", () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain("streamctl.config.ts");
       expect(warnings[0]).toContain(".streamctl/config.ts");
+    });
+
+    it("evaluates the root config and not the legacy one", async () => {
+      // The layer that can actually violate this. `test/resolve.test.ts` asserts the same
+      // property, but the resolver only stats — it has no way to evaluate anything, so
+      // that test guards where the risk isn't. `loadConfig` is the call that evaluates,
+      // and a two-call loader would evaluate both modules while still returning the root
+      // result: every assertion in the test above stays true. Measured at P01-V01.
+      const rootSentinel = join(root, "root-evaluated");
+      const legacySentinel = join(root, "legacy-evaluated");
+      await writeFile(join(root, "streamctl.config.ts"), sideEffectConfig(rootSentinel, VALID_BODY));
+      await mkdir(join(root, ".streamctl"), { recursive: true });
+      await writeFile(join(root, ".streamctl", "config.ts"), sideEffectConfig(legacySentinel, VALID_BODY));
+
+      await loadStreamctlConfig(root, { logger: { warn: () => {} } });
+
+      // Positive first: it proves the fixture works, so the negative below cannot pass
+      // because the body silently failed to write.
+      expect(existsSync(rootSentinel)).toBe(true);
+      expect(existsSync(legacySentinel)).toBe(false);
     });
 
     it.skipIf(!canSymlink)("accepts a config that is a symlink", async () => {
