@@ -87,6 +87,12 @@ Include these in the release notes; the rest is generated from commit subjects.
   ```
 
   Nothing else under `.config/` ever resolved, and nothing does now.
+
+  The affected population is narrower than it reads: below c12 3.2.0 there is no
+  `_configFile`, so the old loader raised `NOT_INITIALIZED` from any location. A
+  repo on this layout was only ever working if its tree resolved c12 >= 3.2.0.
+  The `git mv` is worth doing either way, so the instruction above is not
+  conditional on that.
 - Minor bump: new default, no removals.
 
 Use Conventional Commit subjects (and `!` / `BREAKING CHANGE:` for anything that

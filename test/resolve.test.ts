@@ -235,6 +235,22 @@ describe("resolveConfigFile", () => {
    * unreachable. So there is no rejection code to review, and nothing visibly breaks if
    * a refactor undoes it. These tests are the only guard. A failure here means the
    * probe-before-load ordering was lost; do not "fix" it by re-admitting `.config/`.
+   *
+   * Measured against c12 3.3.4 — `loadConfig` alone, no probe, `_configFile`:
+   *
+   * ```
+   * fixture                        configFile: ".streamctl/config"   configFile: "streamctl.config"
+   * .config/.streamctl/config.ts   .config/.streamctl/config.ts      (none)
+   * .config/streamctl.ts           (none)                            .config/streamctl.ts
+   * .config/streamctl.config.ts    (none)                            .config/streamctl.config.ts
+   * ```
+   *
+   * The right-hand column is the point: under the spelling this feature adopted, c12
+   * would in fact reach into `.config/` for two of the three, and the existence probe is the
+   * only reason it never gets the chance. Left column, top row, is the one real
+   * behavior change in the feature — see that test below. Both were reasoned about for
+   * two gates before being measured; the numbers are here so the next reader inherits
+   * a measurement rather than the argument.
    */
   describe(".config/ is deliberately not supported", () => {
     it("does not resolve .config/streamctl.ts", async () => {
