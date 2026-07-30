@@ -713,6 +713,12 @@ describe("runUpgrade", () => {
     expect(error).toBeInstanceOf(StreamctlError);
     expect((error as StreamctlError).code).toBe("CONFIG_INVALID");
     expect((error as StreamctlError).message).toMatch(/ambiguous version pin/i);
+    // This repo uses the root config, so it catches a hardcoded *legacy* literal in the
+    // ambiguous branch — the mirror of the legacy-repo test on the no-pin branch, which
+    // catches a hardcoded root one. Between them both branches and both directions are
+    // covered; the unreadable-file branch is deliberately left unpinned, since only a
+    // TOCTOU delete between the resolver's probe and the read can reach it.
+    expect(((error as StreamctlError).details as { path: string }).path).toBe("streamctl.config.ts");
 
     // Guessing between the two would corrupt one of them, so we write nothing.
     expect(await readConfig()).toBe(ambiguous);

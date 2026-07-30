@@ -83,10 +83,15 @@ export const managedFileSchema = z.strictObject({
   // `././x` all reach disk as `join(cwd, path)` — the same file a bare `x` names, so an
   // equality or prefix test on the raw value is trivially bypassed.
   //
-  // `posix.normalize`, never the platform `normalize`: the latter emits backslashes on
-  // Windows, which the check three lines above rejects. It also leaves a leading `..`
-  // in place, so the `..` check keeps firing on the raw path; a doubly-bad path simply
-  // collects two issues, which is why this is not an early return.
+  // `posix.normalize`, never the platform `normalize`. On Windows the latter turns
+  // `.streamctl/config.ts` into `.streamctl\config.ts`, so the legacy prefix test below
+  // silently stops matching and the reservation disappears with no issue raised — the
+  // backslash check above does not save it, because that runs on the raw `file.path`,
+  // which has no backslash. Verified against `win32.normalize`.
+  //
+  // Normalization also leaves a leading `..` in place, so the `..` check keeps firing on
+  // the raw path; a doubly-bad path simply collects two issues, which is why this is not
+  // an early return.
   const reserved = posix.normalize(file.path);
   // `package.json` is owned by the version reconcile (writes it last from a pre-write
   // snapshot); managing it as a file too would let the reconcile silently clobber that write.

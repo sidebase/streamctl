@@ -1,5 +1,6 @@
 import type { ZodError } from "zod";
 import { describe, expect, it } from "vitest";
+import { CONFIG_FILE, LEGACY_CONFIG_FILE } from "../src/config/resolve";
 import {
   managedFileSchema,
   payloadManifestSchema,
@@ -139,6 +140,16 @@ describe("ManagedFile", () => {
       for (const path of ["eslint.config.ts", "prisma.config.ts", "acme.config.ts"]) {
         expect(accepts(path), path).toBe(true);
       }
+    });
+
+    // The schema duplicates these spellings rather than importing them, because the
+    // published `./manifest` entry point must not acquire a path into the loader (which
+    // imports c12). A test has no such constraint, so it can hold the two in agreement:
+    // renaming a constant in `resolve.ts` would otherwise silently un-reserve the path
+    // while this file's own cases kept passing.
+    it("stays in agreement with the resolver's spellings", () => {
+      expect(reject(`${CONFIG_FILE}.ts`)).toContain("path");
+      expect(reject(`${LEGACY_CONFIG_FILE}.ts`)).toContain("path");
     });
 
     it("accepts the reserved names outside the invocation directory", () => {
