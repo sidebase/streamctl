@@ -997,17 +997,23 @@ describe("runUpgrade: legacy config location", () => {
     // (see the comment on `writeConfig`); the root-repo tests above are what can, and
     // only while the default fixture stays at the root.
     //
-    // Do not expect to notice if you move it. Measured: a *faithful* relocation — this
-    // helper, `readConfig`, `hashSnapshot`, the `NOT_INITIALIZED` teardown, the `pkgDir`
-    // blocks and the three path-detail expectations, all handled properly — is 57/57
-    // green on the first run with this assertion removed, and a full `P02-T02` revert on
-    // top of that is *also* 57/57 green. There is no red stage to catch it at: the path
-    // details are part of doing the relocation correctly, not a warning that something
-    // is wrong. This assertion is the only thing between a competent fixture move and
-    // total loss of that guard, which is why it earns its place despite proving nothing
-    // about the product.
+    // Moving it is defended in depth, and this assertion is only the first layer.
+    // Measured against a *faithful* relocation — this helper, `readConfig`,
+    // `hashSnapshot` and every path-detail expectation, all handled properly:
     //
-    // No `force` on the `rm` either: without it, a moved default no-ops silently here.
+    //   relocation, assertion present            -> 4 red (this block)
+    //   assertion deleted                        -> still 4 red
+    //   assertion deleted + `force` on the `rm`  -> still 3 red
+    //
+    // So the `rm` below is a second, independent guard: with the default moved, it
+    // raises ENOENT on its own, with no assertion involved. That is why it has no
+    // `force` — adding one is the obvious way to "fix" the resulting failure, and it
+    // is the step this comment exists to argue against.
+    //
+    // An earlier version of this comment claimed the relocation goes 57/57 green the
+    // moment this assertion is removed. That does not reproduce; it understates the
+    // protection rather than overstating it. Corrected rather than deleted, because a
+    // comment asserting a measurement nobody can repeat is worse than no comment.
     expect(existsSync(join(repo, `${CONFIG_FILE}.ts`)), "the default fixture must stay at the root").toBe(true);
     await rm(join(repo, `${CONFIG_FILE}.ts`));
     await mkdir(join(repo, ".streamctl"), { recursive: true });
