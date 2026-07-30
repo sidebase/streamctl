@@ -319,9 +319,10 @@ async function previewSync(opts: RunUpgradeOptions, config: StreamctlConfig, onP
  * transactionally: either it fully applies or it restores the exact pre-upgrade tree.
  *
  * Three files are snapshotted, since a failed run could leave them inconsistent: the
- * resolved config (root or legacy), `package.json`, and the detected PM's lockfile. The pin is
- * validated and written before install so a failed install rolls back cleanly, and
- * `runSync` writes nothing until its batch is clean, which doubles as the preflight.
+ * resolved config (root or legacy), `package.json`, and the detected PM's lockfile.
+ * The pin is validated and written before install so a failed install rolls back
+ * cleanly, and `runSync` writes nothing until its batch is clean, which doubles as the
+ * preflight.
  *
  * Any failure after the snapshot restores it byte-exactly and re-throws the original
  * error tagged `rolledBack: true`; only `node_modules` reflects the aborted install.

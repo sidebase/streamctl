@@ -1008,6 +1008,23 @@ describe("runUpgrade: legacy config location", () => {
     expect(await readLegacyConfig()).not.toContain(`version: "${TO}"`);
   });
 
+  it("CONFIG_INVALID details name the legacy path when no pin is bumpable", async () => {
+    await useLegacyConfig();
+    // Single-line object: the pin regex is line-anchored, so `version:` mid-line is not
+    // a bumpable pin. The error then has to name the file the user actually has.
+    await writeFile(join(repo, legacyRel), `export default { package: "@acme/payload", base: "base", version: "${FROM}", profile: "nuxt-4" };\n`);
+
+    const error = await runUpgrade(baseOpts({ install: vi.fn(async () => {}) })).catch((e: unknown) => e);
+
+    expect((error as StreamctlError).code).toBe("CONFIG_INVALID");
+    const details = (error as StreamctlError).details as { path: string };
+    expect(details.path).toBe(legacyRel);
+    // The negative is the point: a regression to the literal would send a legacy-repo
+    // user to a root file that does not exist.
+    expect(details.path).not.toBe("streamctl.config.ts");
+    expect((error as StreamctlError).message).toContain(legacyRel);
+  });
+
   it("ROLLBACK_FAILED names the legacy path, not the root one", async () => {
     await useLegacyConfig();
     const install = vi.fn(async () => {
