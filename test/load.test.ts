@@ -198,7 +198,11 @@ describe("loadStreamctlConfig", () => {
       await loadStreamctlConfig(root, { logger: { warn: () => {} } });
 
       // Positive first: it proves the fixture works, so the negative below cannot pass
-      // because the body silently failed to write.
+      // because the body silently failed to write. The positive is free here only because
+      // the loader is *expected* to evaluate one of the two. Extend this to a case where
+      // neither should be evaluated and the shortcut dies — that needs `resolve.test.ts`'s
+      // proof phase, which evaluates the module directly rather than relying on the unit
+      // under test to do it.
       expect(existsSync(rootSentinel)).toBe(true);
       expect(existsSync(legacySentinel)).toBe(false);
     });

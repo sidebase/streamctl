@@ -4,10 +4,10 @@
 // `@acme/payload` in test/fixtures/synthetic-payload.
 //
 // For the package manager named by E2E_PM (npm, pnpm, yarn or bun) it runs
-// three legs on a throwaway repo pinned to that PM via `packageManager`:
+// these legs on throwaway repos pinned to that PM via `packageManager`:
 //
-//   1. init --no-install --skip-registry-check. Scaffolds .streamctl/config.ts
-//      and reports `<pm> install`. No registry traffic.
+//   1. init --no-install --skip-registry-check. Scaffolds streamctl.config.ts
+//      at the repo root and reports `<pm> install`. No registry traffic.
 //   2. Read-only adoption. "Install" the payload by copying the fixture into
 //      node_modules/@acme/payload, seed-sync, then `check` and `sync --dry-run`
 //      must both exit 0 with a byte-identical tree.
@@ -15,9 +15,15 @@
 //      payload's preset.json and its source, then re-sync with the same binary.
 //      It has to land, which is what proves the CLI is payload-driven rather
 //      than org-coded.
+//   4. upgrade against a newer vendored payload, with a chained sync. Runs on
+//      npm regardless of E2E_PM, and is the one leg that stays on the LEGACY
+//      config location -- see the comment in runUpgradeLeg.
+//   5. --version reports the semver injected at build time.
+//   6. --json usage: an unknown command yields a color-free USAGE envelope.
 //
-// Every PM runs all three. Beyond detection and the install-command name (both
-// from engine/pm.ts) the behavior is PM-agnostic.
+// Every PM runs legs 1-3; 4-6 are PM-independent and run once. Beyond detection
+// and the install-command name (both from engine/pm.ts) the behavior is
+// PM-agnostic.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -91,13 +97,12 @@ function installPayload(work) {
   return dest;
 }
 
-/** A throwaway repo pinned to `pm` with a scaffolded `.streamctl/config.ts`. */
+/** A throwaway repo pinned to `pm` with a scaffolded `streamctl.config.ts`. */
 function makeRepo(pm) {
   const work = mkdtempSync(join(tmpdir(), `streamctl-e2e-${pm}-`));
   writeFileSync(join(work, "package.json"), `${JSON.stringify({ name: "app", private: true, packageManager: `${pm}@1.0.0` }, null, 2)}\n`);
-  mkdirSync(join(work, ".streamctl"), { recursive: true });
   writeFileSync(
-    join(work, ".streamctl", "config.ts"),
+    join(work, "streamctl.config.ts"),
     `export default { package: "${PKG}", base: "app", version: "${PAYLOAD_VERSION}", profile: "std" };\n`,
   );
   return work;
@@ -118,13 +123,22 @@ function runInitSmoke(pm) {
       fail(`init:${pm}`, res);
       return;
     }
-    if (!existsSync(join(work, ".streamctl", "config.ts"))) {
-      console.error(`✗ init:${pm}: did not scaffold .streamctl/config.ts`);
+    if (!existsSync(join(work, "streamctl.config.ts"))) {
+      console.error(`✗ init:${pm}: did not scaffold streamctl.config.ts`);
+      process.exitCode = 1;
+      return;
+    }
+    // `existsSync`, never a readFileSync probe: reading a directory throws EISDIR, so a
+    // try/catch probe would report "absent" for a `.streamctl/` sitting right there.
+    // A unit test covers this too; here it runs against the BUILT artifact, which is the
+    // only place a bundling or path-resolution difference between src and dist shows up.
+    if (existsSync(join(work, ".streamctl"))) {
+      console.error(`✗ init:${pm}: created a .streamctl/ directory`);
       process.exitCode = 1;
       return;
     }
     // The scaffolded pin is the PAYLOAD's version, never the CLI's own.
-    const scaffolded = readFileSync(join(work, ".streamctl", "config.ts"), "utf8");
+    const scaffolded = readFileSync(join(work, "streamctl.config.ts"), "utf8");
     if (!scaffolded.includes(`version: "${PAYLOAD_VERSION}"`)) {
       console.error(`✗ init:${pm}: scaffolded pin is not the payload version ${PAYLOAD_VERSION}`);
       process.exitCode = 1;
@@ -258,6 +272,19 @@ function runUpgradeLeg() {
     }, null, 2)}\n`);
     // Multi-line config: `upgrade`'s version-pin bump is line-anchored (`version:` on
     // its own line), unlike the single-line config the other legs scaffold.
+    //
+    // LEGACY location on purpose -- do not move this to the root "for consistency" with
+    // the other legs. Since they moved, this is the ONLY place the `.streamctl/config.*`
+    // fallback is exercised against the built artifact, on any package manager; move it
+    // and the feature's headline promise ("a legacy repo behaves exactly as it does
+    // today") is tested nowhere outside vitest. It is also the right leg to carry that
+    // cost, because the pin bump is the touch point where a wrong path fails most
+    // silently. If this leg is ever restructured, the legacy coverage moves with it.
+    //
+    // Safe because this leg builds its own repo (`mkdtempSync` above) rather than calling
+    // `makeRepo`, which now writes the root path: sharing a builder would make the repo
+    // both-present, root would win, and the assertions below would check a pin bump on a
+    // file `upgrade` never touched.
     mkdirSync(join(work, ".streamctl"), { recursive: true });
     writeFileSync(
       join(work, ".streamctl", "config.ts"),
