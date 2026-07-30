@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bumpDevDeps, readPayloadOverride, runInit } from "../src/engine/init";
 import { createInstaller } from "../src/engine/pm";
 import { StreamctlError } from "../src/errors";
+import { captureStderr } from "./helpers/streams";
 
 // Deliberately different numbers. The CLI and the payload release independently, so a
 // test that passes with one shared constant would hide a re-coupling of the two pins.
@@ -232,6 +233,43 @@ describe("runInit", () => {
     const error = await runInit(baseOpts()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StreamctlError);
     expect((error as StreamctlError).code).toBe("NOT_A_REPO");
+  });
+
+  it("checks for a repo before checking for a config", async () => {
+    // A config with no `package.json` must still fail NOT_A_REPO. The only other
+    // NOT_A_REPO test has neither file, so it cannot see the ordering — and the config
+    // guard is now an awaited resolver call doing up to 24 stats, which invites being
+    // hoisted above the cheap synchronous probe.
+    await writeFile(join(repo, "streamctl.config.ts"), "export default {}\n");
+
+    const error = await runInit(baseOpts()).catch((e: unknown) => e);
+    expect((error as StreamctlError).code).toBe("NOT_A_REPO");
+  });
+
+  it("blocks a both-present repo without emitting the ambiguity warning", async () => {
+    // The one deliberate deviation in the feature: `resolveConfigFile` takes an optional
+    // logger with no `stderrLogger` fallback, and `init` passes none, so a warning cannot
+    // precede the failure. That has two independent halves, and they need two channels:
+    // the spy proves `init` does not forward its own logger; the stderr capture proves
+    // the resolver has no house default behind it. A spy alone is blind to
+    // `(logger ?? stderrLogger).warn(...)`, which writes past it to the real stream.
+    await writeFile(join(repo, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^4.0.0" } }));
+    await writeFile(join(repo, "streamctl.config.ts"), "export default {}\n");
+    await mkdir(join(repo, ".streamctl"), { recursive: true });
+    await writeFile(join(repo, ".streamctl", "config.ts"), "export default {}\n");
+    const warn = vi.fn();
+    const stderr = captureStderr();
+
+    const error = await runInit(baseOpts({ logger: { warn } })).catch((e: unknown) => e);
+
+    // Root wins, so the message names the file `init` would otherwise have written.
+    expect((error as StreamctlError).code).toBe("ALREADY_INITIALIZED");
+    expect((error as StreamctlError).message).toContain("streamctl.config.ts");
+    expect(stderr.join("")).toBe("");
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("streamctl:"));
+    // Also catches a reworded warning that drops the prefix. `init`'s legitimate warnings
+    // (profile detection) never name a config path, so this cannot false-fire.
+    expect(warn).not.toHaveBeenCalledWith(expect.stringMatching(/streamctl\.config\.ts|\.streamctl\/config\.ts/u));
   });
 
   it("surfaces REGISTRY_AUTH_FAILED when packages are unreadable", async () => {
