@@ -93,6 +93,11 @@ Include these in the release notes; the rest is generated from commit subjects.
   repo on this layout was only ever working if its tree resolved c12 >= 3.2.0.
   The `git mv` is worth doing either way, so the instruction above is not
   conditional on that.
+- **New warning:** two extensions of the same config at one location
+  (`streamctl.config.js` next to `streamctl.config.ts`) now warn on stderr that one is
+  *shadowed by* the other, naming the one being read. c12's order puts `.js` ahead of
+  `.ts`, which surprises most people. **Nothing is read differently than before** — this
+  is a new diagnostic, not new behaviour, so a repo that sees it needs no migration.
 - Minor bump: new default, no removals.
 
 Use Conventional Commit subjects (and `!` / `BREAKING CHANGE:` for anything that

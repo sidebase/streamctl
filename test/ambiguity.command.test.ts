@@ -100,3 +100,34 @@ describe("both config locations present", () => {
     expect(lines).toHaveLength(1);
   });
 });
+
+describe("two extensions at one location", () => {
+  // The same channel contract as the block above, asserted directly rather than
+  // inherited. Both warnings route through `logger?.warn`, so the shadow warning is
+  // stderr-only for the same reason the cross-location one is — but "true because it
+  // shares a code path" is an argument, and an argument is what this file exists to
+  // replace. If the two ever diverge, this is what notices.
+  beforeEach(async () => {
+    await rm(join(repo, ".streamctl"), { recursive: true, force: true });
+    await writeFile(join(repo, "streamctl.config.js"), config(VERSION));
+  });
+
+  it("warns on stderr and keeps the --json envelope clean", async () => {
+    const stderr = captureStderr();
+
+    await statusCommand.run?.({ args: { json: true } } as unknown as StatusArgs);
+
+    expect(process.exitCode).toBe(0);
+
+    const envelope = JSON.parse(stdout.join("")) as { ok: boolean; data: { warnings?: unknown[] } };
+    expect(envelope.ok).toBe(true);
+    expect(stdout.join("")).not.toContain("streamctl:");
+    // Not the report's `warnings[]` either, which is a separate channel that does reach
+    // the envelope -- `collectShadowWarnings` writes there, and this deliberately does not.
+    expect(JSON.stringify(envelope.data.warnings ?? [])).not.toContain("shadowed");
+
+    const lines = stderr.join("").split("\n").filter(line => line.length > 0);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("streamctl.config.ts is shadowed by streamctl.config.js");
+  });
+});

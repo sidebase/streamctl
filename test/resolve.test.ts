@@ -211,8 +211,12 @@ describe("resolveConfigFile", () => {
       // shadow list if two candidates are the same spelling — which is the one way the
       // resolver could tell a user to delete the file it just chose. `SUPPORTED_EXTENSIONS`
       // is c12's, so this is a check on a dependency, not on us.
-      const candidates = configCandidates(CONFIG_FILE);
-      expect(new Set(candidates).size).toBe(candidates.length);
+      // Both spellings: the warning fires at either location, so a distinctness claim
+      // about only one is narrower than the property it backs.
+      for (const spelling of [CONFIG_FILE, LEGACY_CONFIG_FILE]) {
+        const candidates = configCandidates(spelling);
+        expect(new Set(candidates).size, spelling).toBe(candidates.length);
+      }
     });
   });
 
