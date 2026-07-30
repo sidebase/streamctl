@@ -231,7 +231,7 @@ export function formatCheck(data: CheckResult, style: Style): string {
 }
 
 export function formatInit(data: InitResult, style: Style): string {
-  // `version` is the payload pin (from `.streamctl/config.ts`); the CLI's own
+  // `version` is the payload pin (from the repo's streamctl config); the CLI's own
   // release gets its own line so the two never read as one number.
   const head = [
     kvLine("base", data.base, style),

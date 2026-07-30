@@ -67,7 +67,7 @@ pnpm streamctl upgrade              # move the pinned version forward, re-sync
 
 ### `streamctl init`
 
-Wire a repo to a payload for the first time. Reads the payload's manifest to pick the base preset and auto-detect the profile (the manifest ships the detection probes, so the CLI has no framework knowledge), scaffolds `.streamctl/config.ts` from the payload's own template, adds the devDependencies, runs the install, then runs the first `sync`.
+Wire a repo to a payload for the first time. Reads the payload's manifest to pick the base preset and auto-detect the profile (the manifest ships the detection probes, so the CLI has no framework knowledge), scaffolds `streamctl.config.ts` from the payload's own template, adds the devDependencies, runs the install, then runs the first `sync`.
 
 | Flag | Type | Effect |
 | ---- | ---- | ------ |
@@ -153,7 +153,7 @@ pnpm streamctl status --outdated --json | jq '.data.files'
 
 ### `streamctl upgrade`
 
-The only command that moves the pinned payload version forward. Before it touches anything it snapshots `.streamctl/config.ts`, `package.json` and the lockfile, and any failure along the way (a bad install, an invalid new payload, a conflict) restores all three byte-for-byte. The [reference](docs/reference.md#the-upgrade-transaction) covers the full transaction, including upgrading over a local `file:` override.
+The only command that moves the pinned payload version forward. Before it touches anything it snapshots the config file, `package.json` and the lockfile, and any failure along the way (a bad install, an invalid new payload, a conflict) restores all three byte-for-byte. The [reference](docs/reference.md#the-upgrade-transaction) covers the full transaction, including upgrading over a local `file:` override.
 
 | Flag | Type | Effect |
 | ---- | ---- | ------ |
@@ -194,7 +194,7 @@ Structured files (`.json*`, `.ya?ml`) get extra safety: composed output is parse
 
 ## Configuration
 
-`init` scaffolds `.streamctl/config.ts` from the payload's own template. The payload exports a typed define function (via its `./config` subpath), so the knobs get full editor inference:
+`init` scaffolds `streamctl.config.ts` at the repo root, from the payload's own template. The payload exports a typed define function (via its `./config` subpath), so the knobs get full editor inference:
 
 ```ts
 import { defineConfig } from "@your-org/config/config";
@@ -215,6 +215,23 @@ export default defineConfig({
 
 A payload that ships no `config.template.ts` gets a generic fallback that imports the CLI's own `defineStreamctlConfig` from `@sidebase/streamctl` (same fields, minus the typed knobs).
 
+### Where the config lives
+
+Exactly two locations are read, and no others:
+
+1. `streamctl.config.ts` at the repo root — the default, and what `init` writes.
+2. `.streamctl/config.<ext>` — the original location, read **permanently**. It is not
+   deprecated, there is no warning, and there is no plan to remove it.
+
+Nothing under `.config/` is read. Both locations accept any extension c12 supports
+(`.ts`, `.js`, `.mjs`, `.json`, `.yaml`, …).
+
+Moving an existing config is a plain `git mv .streamctl/config.ts streamctl.config.ts`
+and nothing else — every command behaves identically either way, which
+`test/status.command.test.ts` asserts by running the same command against both layouts
+and comparing the reports. If both files exist the root one wins and `streamctl` says so
+on stderr once; delete the legacy file to silence it.
+
 ## CI setup
 
 Add the gate to your pipeline; exit `3` means the tree drifted from the payload:
@@ -232,10 +249,10 @@ The probe degrades quietly. If the registry cannot be reached, `check` skips the
 
 | Symptom | Likely cause | Fix |
 | ------- | ------------ | --- |
-| `NOT_INITIALIZED` | no `.streamctl/config.ts` | run `streamctl init` first |
+| `NOT_INITIALIZED` | no `streamctl.config.ts` (and no legacy `.streamctl/config.ts`) | run `streamctl init` first |
 | `CONFIG_PKG_MISSING` | the payload package is not installed | `pnpm install` |
 | `CONFIG_VERSION_MISMATCH` | installed payload version differs from the pinned `version` | `streamctl upgrade` or `pnpm install` |
-| `CONFIG_INVALID` | bad `.streamctl/config.ts`, malformed `preset.json`/`package.json`, or an invalid knob | fix the offending file/value (the `details.path` names it) |
+| `CONFIG_INVALID` | bad `streamctl.config.ts`, malformed `preset.json`/`package.json`, or an invalid knob | fix the offending file/value (the `details.path` names it) |
 | exit `2` (`CONFLICTS_PENDING`) | a `full` file you edited, a marker/merge/structural fault, or a dirty owned path | review the plan; `sync --interactive` to confirm, or `--force` to accept |
 | exit `3` (`DRIFT_DETECTED`) | the working tree drifted from the payload (CI gate) | run `streamctl sync` and commit |
 | `REGISTRY_AUTH_FAILED` | cannot read the payload from GitHub Packages | check the token's `read:packages` scope |

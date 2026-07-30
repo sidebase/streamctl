@@ -21,7 +21,8 @@
 //   5. --version reports the semver injected at build time.
 //   6. --json usage: an unknown command yields a color-free USAGE envelope.
 //
-// Every PM runs legs 1-3; 4-6 are PM-independent and run once. Beyond detection
+// Every PM runs legs 1-3; 4-6 run once per invocation regardless of E2E_PM (so a
+// four-PM CI matrix runs each of them four times). Beyond detection
 // and the install-command name (both from engine/pm.ts) the behavior is
 // PM-agnostic.
 import { spawnSync } from "node:child_process";

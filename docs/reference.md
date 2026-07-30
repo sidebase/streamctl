@@ -49,7 +49,7 @@ The dirty-tree guard: if a streamctl-owned path has uncommitted tracked edits, `
 
 ## How `init` picks the payload version
 
-The `.streamctl/config.ts` `version` pin is the payload's version, never the CLI's. The two
+The `streamctl.config.ts` `version` pin is the payload's version, never the CLI's. The two
 packages release on their own cadence. `init` resolves the pin in this order, before it
 writes anything:
 
@@ -100,7 +100,7 @@ When the version reconcile edits `package.json` (non-`--dry-run`) and a lockfile
 
 `upgrade` is the only command that moves the pinned version forward. Either it applies in full, or it puts the repo back exactly as it was.
 
-The flow runs in this order. Resolve the target, which is the latest published version or whatever `--to` names. Snapshot the three files a failed run could leave inconsistent: `.streamctl/config.ts`, `package.json`, and the detected package manager's lockfile. Bump the pin and the payload devDependency, leaving the CLI's own version alone. Install, so the new bundled presets land on disk. Finally, preflight and apply the first `sync` against the new version.
+The flow runs in this order. Resolve the target, which is the latest published version or whatever `--to` names. Snapshot the three files a failed run could leave inconsistent: the config file (wherever it resolved), `package.json`, and the detected package manager's lockfile. Bump the pin and the payload devDependency, leaving the CLI's own version alone. Install, so the new bundled presets land on disk. Finally, preflight and apply the first `sync` against the new version.
 
 The preflight comes for free from `sync` being transactional. It composes and validates the whole batch and writes nothing until the batch is clean, so a non-interactive conflict or an invalid new payload throws before any managed file changes.
 
@@ -141,8 +141,8 @@ Local-tarball adoption skips `init`'s registry probe. If a `pnpm.overrides` or r
 
 **Payload content that changes under the same version shows up as an `edit` conflict.** Drift is derived and there is no state file, so sync cannot tell a repacked local tarball apart from a local edit. It blocks and asks for review (`--interactive` or `--force`). Fleet updates are better carried by a version bump and `streamctl upgrade`, where the preflight previews the change for you.
 
-Config changes hit the same wall. Edit a `.streamctl/config.ts` knob that feeds a `full`-strategy render (placeholders, fragment toggles) and the next `sync` reports the render delta as `edit`/`adoption` conflicts and exits `2`. Resolve with `sync --interactive`, `sync --force` or `--only <glob>`. `block`/`merge` reconciles are unaffected. A rendered-content baseline would remove this friction, and may show up later.
+Config changes hit the same wall. Edit a `streamctl.config.ts` knob that feeds a `full`-strategy render (placeholders, fragment toggles) and the next `sync` reports the render delta as `edit`/`adoption` conflicts and exits `2`. Resolve with `sync --interactive`, `sync --force` or `--only <glob>`. `block`/`merge` reconciles are unaffected. A rendered-content baseline would remove this friction, and may show up later.
 
-**The shipped ESLint wrapper is not a drop-in for a complex repo.** A bare `createStreamctlEslint()` lints everything, scratch and artifact directories included. Real adopters chain their own ignores onto it: `createStreamctlEslint().append({ ignores: ["scratch/**", ".streamctl/**", /* ... */] })`.
+**The shipped ESLint wrapper is not a drop-in for a complex repo.** A bare `createStreamctlEslint()` lints everything, scratch and artifact directories included. Real adopters chain their own ignores onto it: `createStreamctlEslint().append({ ignores: ["scratch/**", /* ... */] })`.
 
 The Node `engines` floor is inherited. `^22.22.2 || ^24.15.0 || >=26.0.0` copies `write-file-atomic@8`'s own `engines` requirement verbatim, because that atomic-write dependency is what sets the real floor. Relaxing streamctl's range below it would just move the install warning down to the dependency.

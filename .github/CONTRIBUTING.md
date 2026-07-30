@@ -22,7 +22,8 @@ Because streamctl works entirely on local files (the payload is read from `node_
 
 - The exact command you ran and its full output, ideally with `--json` (e.g. `pnpm streamctl sync --dry-run --json`)
 - The output of `pnpm streamctl status --json`
-- The payload package name and its pinned `version` from `.streamctl/config.ts`
+- The payload package name and its pinned `version` from `streamctl.config.ts` (or
+  `.streamctl/config.ts`, if the repo is on the legacy location)
 
 ### Opening an issue
 
