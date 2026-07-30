@@ -238,7 +238,7 @@ describe("runInit", () => {
   it("checks for a repo before checking for a config", async () => {
     // A config with no `package.json` must still fail NOT_A_REPO. The only other
     // NOT_A_REPO test has neither file, so it cannot see the ordering — and the config
-    // guard is now an awaited resolver call doing up to 24 stats, which invites being
+    // guard is now an awaited resolver call doing 24 stats every time, which invites being
     // hoisted above the cheap synchronous probe.
     await writeFile(join(repo, "streamctl.config.ts"), "export default {}\n");
 

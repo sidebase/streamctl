@@ -86,7 +86,7 @@ Include these in the release notes; the rest is generated from commit subjects.
   git mv .config/.streamctl/config.ts streamctl.config.ts
   ```
 
-  Nothing else under `.config/` ever resolved, and nothing does now.
+  Nothing else under `.config/` is read by streamctl, before or after this release.
 
   The affected population is narrower than it reads: below c12 3.2.0 there is no
   `_configFile`, so the old loader raised `NOT_INITIALIZED` from any location. A

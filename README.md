@@ -227,9 +227,10 @@ Nothing under `.config/` is read. Both locations accept any extension c12 suppor
 (`.ts`, `.js`, `.mjs`, `.json`, `.yaml`, …).
 
 Moving an existing config is a plain `git mv .streamctl/config.ts streamctl.config.ts`
-and nothing else — every command behaves identically either way, which
-`test/status.command.test.ts` asserts by running the same command against both layouts
-and comparing the reports. If both files exist the root one wins and `streamctl` says so
+and nothing else — every command behaves identically either way. `status` is the case
+held to that by test: `test/status.command.test.ts` runs it against one repo in both
+layouts and asserts the two reports are equal, down to the absence of any trace of which
+file was read. If both files exist the root one wins and `streamctl` says so
 on stderr once; delete the legacy file to silence it.
 
 ## CI setup

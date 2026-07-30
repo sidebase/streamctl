@@ -191,8 +191,10 @@ describe("resolveConfigFile", () => {
       const location = await resolveConfigFile(root, logger);
 
       expect(location?.rel).toBe("streamctl.config.js");
-      // Same-location shadowing is not the both-present case.
-      expect(warnings).toEqual([]);
+      // One warning, and it is the shadow one — same-location shadowing is not the
+      // both-present case, which needs a config at each of the two locations.
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).not.toContain("both");
     });
 
     it("builds one candidate per c12 extension, in c12's order", async () => {
@@ -201,6 +203,103 @@ describe("resolveConfigFile", () => {
       // pass a bare non-empty check while silently disabling the whole probe.
       expect(configCandidates(CONFIG_FILE)).toEqual(SUPPORTED_EXTENSIONS.map(ext => `streamctl.config${ext}`));
       expect(configCandidates(LEGACY_CONFIG_FILE)).toHaveLength(SUPPORTED_EXTENSIONS.length);
+    });
+
+    it("builds distinct candidates", () => {
+      // The precondition the shadow warning rests on. The winner is `matches[0]` and the
+      // shadowed list is everything after it, so the winner can only appear in its own
+      // shadow list if two candidates are the same spelling — which is the one way the
+      // resolver could tell a user to delete the file it just chose. `SUPPORTED_EXTENSIONS`
+      // is c12's, so this is a check on a dependency, not on us.
+      const candidates = configCandidates(CONFIG_FILE);
+      expect(new Set(candidates).size).toBe(candidates.length);
+    });
+  });
+
+  describe("same-location extension shadowing", () => {
+    it("warns and reads the .js when both extensions exist at the root", async () => {
+      await writeRootConfig(".ts");
+      await writeRootConfig(".js");
+
+      const location = await resolveConfigFile(root, logger);
+
+      expect(location?.rel).toBe("streamctl.config.js");
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("streamctl.config.ts is shadowed by streamctl.config.js");
+      expect(warnings[0]).toContain("streamctl.config.js is the one being read");
+    });
+
+    it("warns at the legacy location too", async () => {
+      await writeLegacyConfig(".ts");
+      await writeLegacyConfig(".js");
+
+      const location = await resolveConfigFile(root, logger);
+
+      expect(location?.rel).toBe(".streamctl/config.js");
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain(".streamctl/config.ts is shadowed by .streamctl/config.js");
+    });
+
+    it("names every shadowed sibling", async () => {
+      await writeRootConfig(".ts");
+      await writeRootConfig(".js");
+      await writeRootConfig(".mjs");
+
+      await resolveConfigFile(root, logger);
+
+      const [warning] = warnings;
+      expect(warning).toContain("streamctl.config.ts");
+      expect(warning).toContain("streamctl.config.mjs");
+      // Never the winner in its own shadow list: this is the message that would tell a
+      // user to delete the only config they have.
+      expect(warning).toContain("are shadowed by streamctl.config.js");
+      expect(warning.slice(0, warning.indexOf("are shadowed by"))).not.toContain("streamctl.config.js");
+    });
+
+    it("says nothing when one extension exists", async () => {
+      await writeRootConfig(".ts");
+
+      await resolveConfigFile(root, logger);
+
+      expect(warnings).toEqual([]);
+    });
+
+    it("ignores shadowing at the losing location", async () => {
+      // The legacy location is ignored wholesale when a root config exists, so a
+      // collision inside it changes nothing and warning about it would be noise.
+      await writeRootConfig(".ts");
+      await writeLegacyConfig(".ts");
+      await writeLegacyConfig(".js");
+
+      await resolveConfigFile(root, logger);
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("both");
+    });
+
+    it("emits the shadow warning before the cross-location one", async () => {
+      // A shadow is known once one location has been probed; the cross warning needs
+      // both. Pinned so CI output stays predictable rather than tracking probe order.
+      await writeRootConfig(".ts");
+      await writeRootConfig(".js");
+      await writeLegacyConfig(".ts");
+
+      await resolveConfigFile(root, logger);
+
+      expect(warnings).toHaveLength(2);
+      expect(warnings[0]).toContain("is shadowed by");
+      expect(warnings[1]).toContain("both streamctl.config.js and .streamctl/config.ts");
+    });
+
+    it("emits nothing when no logger is passed", async () => {
+      const stderr = captureStderr();
+      await writeRootConfig(".ts");
+      await writeRootConfig(".js");
+
+      await resolveConfigFile(root);
+
+      expect(warnings).toEqual([]);
+      expect(stderr.join("")).toBe("");
     });
   });
 
@@ -246,11 +345,11 @@ describe("resolveConfigFile", () => {
    * ```
    *
    * The right-hand column is the point: under the spelling this feature adopted, c12
-   * would in fact reach into `.config/` for two of the three, and the existence probe is the
-   * only reason it never gets the chance. Left column, top row, is the one real
-   * behavior change in the feature — see that test below. Both were reasoned about for
-   * two gates before being measured; the numbers are here so the next reader inherits
-   * a measurement rather than the argument.
+   * would in fact reach into `.config/` for two of the three, and the probe is the only
+   * reason it never gets the chance. Left column, top row, is the one real behavior
+   * change in the feature — pinned by `it("does not resolve .config/.streamctl/config.ts")`
+   * below. Both were reasoned about for two gates before being measured; the numbers are
+   * here so the next reader inherits a measurement rather than the argument.
    */
   describe(".config/ is deliberately not supported", () => {
     it("does not resolve .config/streamctl.ts", async () => {

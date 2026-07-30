@@ -50,14 +50,25 @@ function isFile(abs: string): boolean {
   }
 }
 
-function probe(cwd: string, spelling: string): string | null {
+/**
+ * Every existing file for a spelling, in c12's precedence order — the first entry is
+ * the one c12 will load.
+ *
+ * Walks the whole list rather than short-circuiting, which is what makes the shadow
+ * warning possible: stopping at the first hit cannot see that a second exists. The cost
+ * is fixed at 24 stats per run (12 extensions × 2 locations) instead of as few as 2,
+ * all against paths the OS has cached, and it is noise beside jiti compiling a TS
+ * config.
+ */
+function probeAll(cwd: string, spelling: string): string[] {
+  const matches: string[] = [];
   for (const candidate of configCandidates(spelling)) {
     const abs = resolve(cwd, candidate);
     if (isFile(abs)) {
-      return abs;
+      matches.push(abs);
     }
   }
-  return null;
+  return matches;
 }
 
 /**
@@ -79,21 +90,41 @@ function probe(cwd: string, spelling: string): string | null {
  * not a breaking change (`50_api.md`).
  */
 export async function resolveConfigFile(cwd: string, logger?: Logger): Promise<ConfigFileLocation | null> {
-  const rootAbs = probe(cwd, CONFIG_FILE);
+  const rootMatches = probeAll(cwd, CONFIG_FILE);
   // Probed even on a root hit: it is the only signal for the both-present warning.
-  const legacyAbs = probe(cwd, LEGACY_CONFIG_FILE);
-  const abs = rootAbs ?? legacyAbs;
-  if (abs === null) {
+  const legacyMatches = probeAll(cwd, LEGACY_CONFIG_FILE);
+
+  // The winning location, entire. Only this one can shadow: the other is ignored
+  // wholesale, so reporting a collision inside it would be noise about files that make
+  // no difference either way.
+  const [rootAbs] = rootMatches;
+  const [legacyAbs] = legacyMatches;
+  const [abs, ...shadowed] = rootAbs === undefined ? legacyMatches : rootMatches;
+  if (abs === undefined) {
     return null;
   }
 
   const toRel = (path: string): string => relative(cwd, path).split(sep).join("/");
 
-  if (rootAbs !== null && legacyAbs !== null) {
+  // Shadow first, then cross-location: a shadow is known as soon as one location has
+  // been probed, while the cross warning needs both. Pinned by test so the order stays
+  // predictable in CI logs rather than following whatever the code happens to do.
+  //
+  // `abs` cannot appear in `shadowed`: it is `matches[0]` and the candidates are one
+  // spelling crossed with twelve distinct extensions, so a file can match at most once.
+  // That is why there is no "skip the resolved file" check here — it could never fire.
+  // The precondition is candidate distinctness, which `resolve.test.ts` pins directly.
+  if (shadowed.length > 0) {
+    logger?.warn(
+      `streamctl: ${shadowed.map(toRel).join(" and ")} ${shadowed.length > 1 ? "are" : "is"} shadowed by ${toRel(abs)}; ${toRel(abs)} is the one being read.`,
+    );
+  }
+
+  if (rootAbs !== undefined && legacyAbs !== undefined) {
     logger?.warn(
       `streamctl: both ${toRel(rootAbs)} and ${toRel(legacyAbs)} exist; using ${toRel(rootAbs)} and ignoring ${toRel(legacyAbs)}.`,
     );
   }
 
-  return { abs, rel: toRel(abs), source: rootAbs !== null ? "root" : "legacy" };
+  return { abs, rel: toRel(abs), source: rootAbs === undefined ? "legacy" : "root" };
 }
