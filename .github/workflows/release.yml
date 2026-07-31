@@ -1,9 +1,12 @@
 name: Release
 
-# Live. Publishes @sidebase/streamctl to the public npm registry under the
-# @sidebase scope. workflow_dispatch only and gated behind the protected
-# `release` environment, so every publish is a deliberate manual dispatch that
-# pauses for approval. docs/release.md has the ship-time checklist.
+# Publishes @sidebase/streamctl to the public npm registry under the @sidebase
+# scope. workflow_dispatch only, and scoped to the `release` environment.
+#
+# That environment is only a gate once it exists and carries reviewers plus
+# NPM_TOKEN. GitHub auto-creates a missing environment unprotected and
+# secretless, so an unconfigured dispatch skips the approval pause and dies at
+# publish on auth. docs/release.md has the setup checklist and how to check it.
 #
 # The two packages version independently, no lockstep. Publish the CLI before
 # the config package on a first publish: the config repo's validate-presets

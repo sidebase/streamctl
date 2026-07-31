@@ -1,9 +1,10 @@
 # Release runbook (`@sidebase/streamctl`)
 
-> **Status: 0.1.0 is on the registry.** The `Release` workflow
-> (`.github/workflows/release.yml`) stays `workflow_dispatch`-only and gated behind
-> the protected `release` environment, so every publish is a deliberate manual
-> dispatch by a maintainer who has completed the one-time setup below.
+> **Status: `0.1.0` is on the registry, published by hand.** The `Release`
+> workflow (`.github/workflows/release.yml`) has never published, and the
+> one-time setup below is not confirmed done. It stays `workflow_dispatch`-only
+> and scoped to the `release` environment, so every publish is a deliberate
+> manual dispatch.
 
 `streamctl` publishes to the public npm registry under the `@sidebase` scope. It
 is an intentionally ESM-only package; the published tarball ships only `dist/`.
@@ -36,8 +37,17 @@ removed) so consumer CI that parses it survives CLI upgrades.
 
 ## One-time setup
 
-Done as of `0.1.0`. Kept as a record of what the release path depends on, and as
-the checklist to re-run if the org, token or environment is ever rebuilt.
+**Not verified as done.** `0.1.0` reached the registry by a manual publish that
+bypassed this workflow, so its presence says nothing about whether the workflow
+can publish. As of writing, `gh api repos/sidebase/streamctl/environments`
+returns zero environments and `gh secret list` is empty, so at minimum step 3 is
+outstanding. Step 2's token may exist as an **org** secret, which is not readable
+without org admin. Confirm before the first dispatch.
+
+A missing environment does not fail loudly: GitHub creates one on demand with no
+protection rules and no secrets, so the run loses its approval gate and reaches
+the publish step with an empty `NODE_AUTH_TOKEN`. It then fails on auth, before
+the push, leaving origin untouched.
 
 1. **npm org / scope.** Create/claim the `@sidebase` org on npmjs.com and add the
    release machine account. Confirm the package name `@sidebase/streamctl` is free
