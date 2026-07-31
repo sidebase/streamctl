@@ -1,50 +1,40 @@
-name: Release
+name: Release on NPM
 
-# Publishes @sidebase/streamctl to the public npm registry under the @sidebase
-# scope. workflow_dispatch only, and scoped to the `release` environment.
+# Publishes @sidebase/streamctl to the public npm registry, tokenless.
 #
-# That environment is only a gate once it exists and carries reviewers plus
-# NPM_TOKEN. GitHub auto-creates a missing environment unprotected and
-# secretless, so an unconfigured dispatch skips the approval pause and dies at
-# publish on auth. docs/release.md has the setup checklist and how to check it.
-#
-# The two packages version independently, no lockstep. Publish the CLI before
-# the config package on a first publish: the config repo's validate-presets
-# consumes the schema this package exports. See docs/release.md.
+# Same shape as sidebase/ssm-secrets and sidebase/nuxt-auth: publishing a
+# GitHub Release for a vX.Y.Z tag is the trigger, and the OIDC token minted by
+# `id-token: write` authenticates to npm. No NPM_TOKEN exists, so there is no
+# publish secret to leak or rotate. docs/release.md has the checklist.
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Release version X.Y.Z (no leading v)."
-        required: true
-        type: string
+  release:
+    types: [published] # runs when a GitHub Release is published
 
 permissions:
-  contents: write # create + push the vX.Y.Z tag
-  id-token: write # OIDC for npm provenance (--provenance)
+  contents: read
+  id-token: write # OIDC: npm trusted publishing + provenance
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
-    # Belt-and-braces: never release off a non-default branch.
-    if: github.ref == 'refs/heads/main'
+  publish:
+    name: Publish package from release tag
+    # Only tags produced by the release process, `vX.Y.Z` or a `-` prerelease.
+    if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Protected environment: require a reviewer + hold the NPM_TOKEN secret here.
-    # A compromised release propagates to every consuming repo on the next
-    # `streamctl upgrade`, so this gate matters.
-    environment: release
-    # Bind the dispatch input to an env var and reference "$VERSION" in run blocks,
-    # rather than interpolating `${{ inputs.version }}` straight into shell (which is
-    # a script-injection shape even though the input is maintainer-only here).
+    # Bind the tag to an env var and reference "$TAG" in run blocks rather than
+    # interpolating `${{ }}` into shell, which is a script-injection shape even
+    # though only a maintainer can publish a release here.
     env:
-      VERSION: ${{ inputs.version }}
+      TAG: ${{ github.event.release.tag_name }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out the tag referenced by this release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
 
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -53,69 +43,55 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+          # Required for setup-node to write the registry into .npmrc.
           registry-url: https://registry.npmjs.org
-          scope: "@sidebase"
+
+      # The tag is the source of truth for the version now, so a tag that
+      # disagrees with package.json would publish a version nobody asked for.
+      # build.config.ts also injects package.json "version" into the CLI's
+      # `--version` string, so a mismatch ships a CLI that misreports itself.
+      - name: Verify tag matches package.json version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "v$PKG_VERSION" != "$TAG" ]; then
+            echo "::error::Tag ($TAG) does not match package.json version (v$PKG_VERSION)"
+            exit 1
+          fi
+          echo "Tag $TAG matches package.json."
 
       - run: pnpm install --frozen-lockfile
 
-      # Fail fast if this version was already tagged. A re-release would publish
-      # a tarball that diverges from the existing tag.
-      - name: Guard, release tag must not already exist
-        run: |
-          tag="v${VERSION}"
-          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
-            echo "::error::Tag ${tag} already exists on origin, refusing to re-release."
-            exit 1
-          fi
-          echo "Tag ${tag} is free."
-
-      # Set the version FIRST: build.config.ts injects package.json "version" into
-      # the CLI's `--version` string at build time, so the bump must precede build.
-      - name: Set version
-        run: npm pkg set version="${VERSION}"
-
-      # Full quality gate before anything is published.
+      # Full quality gate before anything is published. The siblings skip this
+      # because their PR CI covers it; kept here because publishing is the only
+      # thing that runs against the tagged tree specifically.
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm lint
       - run: pnpm build
 
-      # Verify the PACKAGED artifact before publishing. publint checks the
-      # published package.json (exports / files / bin correctness); attw checks type
-      # resolution. `--profile esm-only` acknowledges this is an intentionally
-      # ESM-only package, so the CJS/node10 "failures" are expected, not real.
+      # Verify the PACKAGED artifact. publint checks the published package.json
+      # (exports / files / bin); attw checks type resolution. `--profile
+      # esm-only` acknowledges this is an intentionally ESM-only package, so the
+      # CJS/node10 "failures" are expected, not real.
       - name: Lint the package (publint)
         run: pnpm exec publint
       - name: Check type resolution (are-the-types-wrong)
         run: pnpm exec attw --pack . --profile esm-only
 
-      # Commit the version bump and tag it BEFORE publishing, so the tagged tree
-      # is the published artifact. The tag is annotated, so
-      # `git push --follow-tags` carries it with the commit.
-      - name: Commit version bump + tag
+      # `npm publish`, not `pnpm publish`: the OIDC exchange for trusted
+      # publishing is implemented in the npm CLI, and it is what the sibling
+      # repos publish with. `prepublishOnly` rebuilds, which is redundant after
+      # the build above and cheap enough to leave as a backstop.
+      - name: Publish to npm with provenance
         run: |
-          tag="v${VERSION}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "release: ${tag}" package.json
-          git tag -a "${tag}" -m "Release ${tag}"
+          # Stable release (vX.Y.Z)
+          if echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            npm publish --provenance --access public
 
-      # Public npm publish WITH provenance: `--provenance` attaches a signed
-      # build-attestation (requires `id-token: write` + npm CLI >=9.5 on a public
-      # repo). `--access public` is required for a first-time scoped publish.
-      - name: Publish to npm (public, with provenance)
-        run: pnpm publish --no-git-checks --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Pre-release (vX.Y.Z-*)
+          elif echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-'; then
+            npm publish --provenance --access public --tag next
 
-      # Push the release commit + tag ONLY after a successful publish, so a failed
-      # publish leaves origin untouched (no orphan tag for an unpublished version).
-      - name: Push release commit + tag
-        run: git push --follow-tags origin HEAD:main
-
-      # Surface the tag as a GitHub Release with notes generated from the commit
-      # subjects since the previous tag. Runs after the tag is on origin.
-      - name: Create GitHub Release
-        run: gh release create "v${VERSION}" --title "v${VERSION}" --generate-notes
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          else
+            echo "Not a valid release tag ($TAG), skipping publish."
+          fi
