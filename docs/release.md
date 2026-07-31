@@ -17,10 +17,20 @@ fails at publish on auth, having changed nothing.
 
 ## Cutting a release
 
-1. Bump `package.json` to `X.Y.Z` and merge to `main`.
-2. `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`
-3. `gh release create vX.Y.Z --title vX.Y.Z --generate-notes`, then **publish**
-   it. A draft triggers nothing.
+From `main`, up to date. `npm version` bumps `package.json`, commits it with the
+bare version as the subject, and tags that commit, so the bump and the tag cannot
+drift apart.
+
+```sh
+npm version minor          # or patch / major
+git push --follow-tags
+gh release create vX.Y.Z --title vX.Y.Z --generate-notes
+```
+
+Then **publish** the release. A draft triggers nothing.
+
+The bump commit goes straight to `main`, no PR, matching `sidebase/ssm-secrets`
+and `sidebase/nuxt-auth`.
 
 Publishing runs the workflow: checks out the tag, refuses if the tag and
 `package.json` version disagree, runs `typecheck` / `test` / `lint` / `build`
