@@ -36,6 +36,9 @@ removed) so consumer CI that parses it survives CLI upgrades.
 
 ## One-time setup
 
+Done as of `0.1.0`. Kept as a record of what the release path depends on, and as
+the checklist to re-run if the org, token or environment is ever rebuilt.
+
 1. **npm org / scope.** Create/claim the `@sidebase` org on npmjs.com and add the
    release machine account. Confirm the package name `@sidebase/streamctl` is free
    (or owned). `publishConfig.access` is already `public` in `package.json`.
@@ -65,6 +68,16 @@ approve the environment gate. The workflow:
 
 After the run, verify the published tarball on npm, the `vX.Y.Z` tag, and the
 generated GitHub Release notes.
+
+Step 6 diffs against the previous tag, so every release needs its predecessor
+tagged or the notes cover the whole history. **`0.1.0` was published outside this
+workflow and left no tag.** `v0.1.0` has since been backfilled onto
+`265809b` (`chore: bump deps (#6)`), the last commit carrying that version, so
+the next release diffs against the right point. Nothing else needs backfilling.
+
+The version is an input, not something you edit first. Do not bump
+`package.json` by hand before dispatching: step 2 sets it, and a pre-bumped
+working tree just means the release commit contains no version change.
 
 ## Notes for the next release
 
