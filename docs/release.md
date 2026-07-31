@@ -1,9 +1,10 @@
 # Release runbook (`@sidebase/streamctl`)
 
-> **Status: 0.1.0 is on the registry.** The `Release` workflow
-> (`.github/workflows/release.yml`) stays `workflow_dispatch`-only and gated behind
-> the protected `release` environment, so every publish is a deliberate manual
-> dispatch by a maintainer who has completed the one-time setup below.
+> **Status: `0.1.0` is on the registry, published by hand.** The `Release`
+> workflow (`.github/workflows/release.yml`) has never published, and the
+> one-time setup below is not confirmed done. It stays `workflow_dispatch`-only
+> and scoped to the `release` environment, so every publish is a deliberate
+> manual dispatch.
 
 `streamctl` publishes to the public npm registry under the `@sidebase` scope. It
 is an intentionally ESM-only package; the published tarball ships only `dist/`.
@@ -36,6 +37,18 @@ removed) so consumer CI that parses it survives CLI upgrades.
 
 ## One-time setup
 
+**Not verified as done.** `0.1.0` reached the registry by a manual publish that
+bypassed this workflow, so its presence says nothing about whether the workflow
+can publish. As of writing, `gh api repos/sidebase/streamctl/environments`
+returns zero environments and `gh secret list` is empty, so at minimum step 3 is
+outstanding. Step 2's token may exist as an **org** secret, which is not readable
+without org admin. Confirm before the first dispatch.
+
+A missing environment does not fail loudly: GitHub creates one on demand with no
+protection rules and no secrets, so the run loses its approval gate and reaches
+the publish step with an empty `NODE_AUTH_TOKEN`. It then fails on auth, before
+the push, leaving origin untouched.
+
 1. **npm org / scope.** Create/claim the `@sidebase` org on npmjs.com and add the
    release machine account. Confirm the package name `@sidebase/streamctl` is free
    (or owned). `publishConfig.access` is already `public` in `package.json`.
@@ -65,6 +78,16 @@ approve the environment gate. The workflow:
 
 After the run, verify the published tarball on npm, the `vX.Y.Z` tag, and the
 generated GitHub Release notes.
+
+Step 6 diffs against the previous tag, so every release needs its predecessor
+tagged or the notes cover the whole history. **`0.1.0` was published outside this
+workflow and left no tag.** `v0.1.0` has since been backfilled onto
+`265809b` (`chore: bump deps (#6)`), the last commit carrying that version, so
+the next release diffs against the right point. Nothing else needs backfilling.
+
+The version is an input, not something you edit first. Do not bump
+`package.json` by hand before dispatching: step 2 sets it, and a pre-bumped
+working tree just means the release commit contains no version change.
 
 ## Notes for the next release
 

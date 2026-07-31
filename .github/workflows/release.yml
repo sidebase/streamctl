@@ -1,11 +1,13 @@
-name: Release (draft, parked, not enabled)
+name: Release
 
-# PARKED. This is a design draft for the @sidebase/streamctl publish path. It
-# is workflow_dispatch only and gated behind the protected `release`
-# environment, so it cannot publish until someone wires the secrets and
-# dispatches it by hand. docs/release.md has the ship-time checklist.
+# Publishes @sidebase/streamctl to the public npm registry under the @sidebase
+# scope. workflow_dispatch only, and scoped to the `release` environment.
 #
-# Single-package publish to the public npm registry under the @sidebase scope.
+# That environment is only a gate once it exists and carries reviewers plus
+# NPM_TOKEN. GitHub auto-creates a missing environment unprotected and
+# secretless, so an unconfigured dispatch skips the approval pause and dies at
+# publish on auth. docs/release.md has the setup checklist and how to check it.
+#
 # The two packages version independently, no lockstep. Publish the CLI before
 # the config package on a first publish: the config repo's validate-presets
 # consumes the schema this package exports. See docs/release.md.
