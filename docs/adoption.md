@@ -38,7 +38,7 @@ pnpm dlx @sidebase/streamctl init --package @your-org/config --yes
 `init` detects the Nuxt major from `package.json` and proposes `base: "nuxt-app"`
 + `profile: "nuxt-4"`. It then:
 
-- writes `.streamctl/config.ts` (the pinned `version` + your knobs),
+- writes `streamctl.config.ts` at the repo root (the pinned `version` + your knobs),
 - scaffolds the `.npmrc` registry block (incl. `always-auth=true`),
 - adds the `@sidebase/streamctl` + your payload (`@your-org/config`) + `jiti`
   devDependencies and runs the install (so the preset payload lands on disk),
@@ -120,7 +120,7 @@ script is not a semver), so it replaces whatever the repo has — opt out per-ke
 `versionSyncExclude`. Everything the baseline does not list (`vue`, `tailwindcss`,
 app deps, your own scripts) is project-owned and never touched.
 
-Disable globally or per-key in `.streamctl/config.ts`:
+Disable globally or per-key in `streamctl.config.ts`:
 
 ```ts
 export default {
@@ -134,7 +134,7 @@ export default {
 
 When a single repo has to hold one pin back, reach for `versionSyncExclude` rather
 than turning `versionSync` off wholesale, and record why (a comment in
-`.streamctl/config.ts` or the PR description). An exclude entry that is not an
+`streamctl.config.ts` or the PR description). An exclude entry that is not an
 active allow-list key is rejected with `CONFIG_INVALID`.
 
 ## 5. `upgrade` (moving the pin forward)
@@ -149,7 +149,7 @@ pnpm streamctl upgrade --dry-run  # resolve target + intended bumps, write nothi
 
 It resolves the target first (`NO_NEWER_VERSION` if you are already on the latest,
 `TARGET_NOT_FOUND` if `--to` names an unpublished version), bumps the
-`.streamctl/config.ts` pin and the payload devDep in lockstep, runs the install,
+config-file pin and the payload devDep in lockstep, runs the install,
 then runs `sync`, interactive by default. Review the diff and commit. A `--dry-run`
 issued before the new presets are installed prints `preview unavailable:
 <version> presets not installed` instead of a misleading empty plan.

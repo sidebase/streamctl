@@ -1,5 +1,6 @@
 import type { RunInitOptions } from "../src/engine/init";
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bumpDevDeps, readPayloadOverride, runInit } from "../src/engine/init";
 import { createInstaller } from "../src/engine/pm";
 import { StreamctlError } from "../src/errors";
+import { captureStderr } from "./helpers/streams";
 
 // Deliberately different numbers. The CLI and the payload release independently, so a
 // test that passes with one shared constant would hide a re-coupling of the two pins.
@@ -104,12 +106,16 @@ describe("runInit", () => {
     expect(result.profile).toBe("nuxt-4");
     expect(install).toHaveBeenCalledTimes(1);
 
-    const config = await readFile(join(repo, ".streamctl", "config.ts"), "utf8");
+    const config = await readFile(join(repo, "streamctl.config.ts"), "utf8");
     expect(config).toContain(`import { defineStreamctlConfig } from "@sidebase/streamctl"`);
     expect(config).toContain(`package: "@acme/payload"`);
     expect(config).toContain(`base: "nuxt-app"`);
     expect(config).toContain(`profile: "nuxt-4"`);
     expect(config).toContain(`version: "${PAYLOAD_VERSION}"`);
+    // `existsSync`, not this file's `readFile(...).catch(() => null)` idiom: `readFile`
+    // on a directory throws EISDIR, the catch swallows it, and the assertion would
+    // report "absent" for a `.streamctl/` sitting right there.
+    expect(existsSync(join(repo, ".streamctl"))).toBe(false);
 
     // `.npmrc` is a preset-managed block written by the first sync, not by init itself.
     const npmrc = await readFile(join(repo, ".npmrc"), "utf8");
@@ -142,7 +148,7 @@ describe("runInit", () => {
 
     await runInit(baseOpts());
 
-    const config = await readFile(join(repo, ".streamctl", "config.ts"), "utf8");
+    const config = await readFile(join(repo, "streamctl.config.ts"), "utf8");
     expect(config).toContain("import { defineNuxtBaseConfig } from \"@acme/payload/config\"");
     expect(config).not.toContain("defineStreamctlConfig");
     expect(config).toContain("package: \"@acme/payload\"");
@@ -204,12 +210,66 @@ describe("runInit", () => {
     const error = await runInit(baseOpts()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StreamctlError);
     expect((error as StreamctlError).code).toBe("ALREADY_INITIALIZED");
+    // The legacy repo is told about the file it has, not about a root file that does
+    // not exist. A code-only assertion passes either way.
+    expect((error as StreamctlError).message).toContain(".streamctl/config.ts");
+  });
+
+  it("rejects a root-config repo with ALREADY_INITIALIZED naming the root file", async () => {
+    await writeFile(join(repo, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^4.0.0" } }));
+    await writeFile(join(repo, "streamctl.config.ts"), "export default {}\n");
+
+    const error = await runInit(baseOpts()).catch((e: unknown) => e);
+    expect((error as StreamctlError).code).toBe("ALREADY_INITIALIZED");
+    expect((error as StreamctlError).message).toContain("streamctl.config.ts");
+    // Not redundant with the line above: neither path is a substring of the other, so
+    // the positive already distinguishes them. This catches a later copy change that
+    // names *both* locations — accurate for the guard, but useless to someone holding
+    // only one of the two files.
+    expect((error as StreamctlError).message).not.toContain(".streamctl/config.ts");
   });
 
   it("rejects a non-repo with NOT_A_REPO", async () => {
     const error = await runInit(baseOpts()).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(StreamctlError);
     expect((error as StreamctlError).code).toBe("NOT_A_REPO");
+  });
+
+  it("checks for a repo before checking for a config", async () => {
+    // A config with no `package.json` must still fail NOT_A_REPO. The only other
+    // NOT_A_REPO test has neither file, so it cannot see the ordering — and the config
+    // guard is now an awaited resolver call doing 24 stats every time, which invites being
+    // hoisted above the cheap synchronous probe.
+    await writeFile(join(repo, "streamctl.config.ts"), "export default {}\n");
+
+    const error = await runInit(baseOpts()).catch((e: unknown) => e);
+    expect((error as StreamctlError).code).toBe("NOT_A_REPO");
+  });
+
+  it("blocks a both-present repo without emitting the ambiguity warning", async () => {
+    // The one deliberate deviation in the feature: `resolveConfigFile` takes an optional
+    // logger with no `stderrLogger` fallback, and `init` passes none, so a warning cannot
+    // precede the failure. That has two independent halves, and they need two channels:
+    // the spy proves `init` does not forward its own logger; the stderr capture proves
+    // the resolver has no house default behind it. A spy alone is blind to
+    // `(logger ?? stderrLogger).warn(...)`, which writes past it to the real stream.
+    await writeFile(join(repo, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^4.0.0" } }));
+    await writeFile(join(repo, "streamctl.config.ts"), "export default {}\n");
+    await mkdir(join(repo, ".streamctl"), { recursive: true });
+    await writeFile(join(repo, ".streamctl", "config.ts"), "export default {}\n");
+    const warn = vi.fn();
+    const stderr = captureStderr();
+
+    const error = await runInit(baseOpts({ logger: { warn } })).catch((e: unknown) => e);
+
+    // Root wins, so the message names the file `init` would otherwise have written.
+    expect((error as StreamctlError).code).toBe("ALREADY_INITIALIZED");
+    expect((error as StreamctlError).message).toContain("streamctl.config.ts");
+    expect(stderr.join("")).toBe("");
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("streamctl:"));
+    // Also catches a reworded warning that drops the prefix. `init`'s legitimate warnings
+    // (profile detection) never name a config path, so this cannot false-fire.
+    expect(warn).not.toHaveBeenCalledWith(expect.stringMatching(/streamctl\.config\.ts|\.streamctl\/config\.ts/u));
   });
 
   it("surfaces REGISTRY_AUTH_FAILED when packages are unreadable", async () => {
@@ -219,7 +279,7 @@ describe("runInit", () => {
     expect((error as StreamctlError).code).toBe("REGISTRY_AUTH_FAILED");
     expect((error as StreamctlError).message).toContain("configure registry access");
     // It failed before writing the manifest, so a retry is not blocked.
-    expect(await readFile(join(repo, ".streamctl", "config.ts")).catch(() => null)).toBeNull();
+    expect(await readFile(join(repo, "streamctl.config.ts")).catch(() => null)).toBeNull();
   });
 
   it("--skip-registry-check bypasses the probe entirely", async () => {
@@ -231,7 +291,7 @@ describe("runInit", () => {
 
     expect(checkRegistryAuth).not.toHaveBeenCalled();
     expect(result.base).toBe("nuxt-app");
-    expect(await readFile(join(repo, ".streamctl", "config.ts"), "utf8")).toContain(`package: "@acme/payload"`);
+    expect(await readFile(join(repo, "streamctl.config.ts"), "utf8")).toContain(`package: "@acme/payload"`);
   });
 
   it("skips the probe when pnpm.overrides already resolves the payload", async () => {
@@ -280,7 +340,7 @@ describe("runInit", () => {
     const pkg = JSON.parse(await readFile(join(repo, "package.json"), "utf8")) as { devDependencies: Record<string, string> };
     expect(pkg.devDependencies["@acme/payload"]).toBe(PAYLOAD_VERSION);
     expect(pkg.devDependencies["@sidebase/streamctl"]).toBe(CLI_VERSION);
-    expect(await readFile(join(repo, ".streamctl", "config.ts"), "utf8")).toContain(`version: "${PAYLOAD_VERSION}"`);
+    expect(await readFile(join(repo, "streamctl.config.ts"), "utf8")).toContain(`version: "${PAYLOAD_VERSION}"`);
   });
 
   it("an explicit payloadVersion wins over the probe but is still checked against the registry", async () => {
@@ -317,7 +377,7 @@ describe("runInit", () => {
     expect((error as StreamctlError).message).toContain("--payload-version");
     // The repo is left exactly as it was, so a retry isn't blocked.
     expect(await readFile(join(repo, "package.json"), "utf8")).toBe(before);
-    expect(await readFile(join(repo, ".streamctl", "config.ts")).catch(() => null)).toBeNull();
+    expect(await readFile(join(repo, "streamctl.config.ts")).catch(() => null)).toBeNull();
   });
 
   it("--skip-registry-check takes an explicit payloadVersion as-is", async () => {
@@ -386,7 +446,7 @@ describe("runInit", () => {
 
     expect(result.sync).toBeNull();
     // Config and devDeps are still written; only the install and first sync are skipped.
-    expect(await readFile(join(repo, ".streamctl", "config.ts"), "utf8")).toContain(`package: "@acme/payload"`);
+    expect(await readFile(join(repo, "streamctl.config.ts"), "utf8")).toContain(`package: "@acme/payload"`);
     const pkg = JSON.parse(await readFile(join(repo, "package.json"), "utf8")) as { devDependencies: Record<string, string> };
     expect(pkg.devDependencies["@acme/payload"]).toBe(PAYLOAD_VERSION);
     expect(await readFile(join(repo, ".editorconfig")).catch(() => null)).toBeNull();
@@ -405,7 +465,7 @@ describe("runInit", () => {
     // is byte-identical.
     expect(install).not.toHaveBeenCalled();
     expect(await readFile(join(repo, "package.json"), "utf8")).toBe(original);
-    expect(await readFile(join(repo, ".streamctl", "config.ts")).catch(() => null)).toBeNull();
+    expect(await readFile(join(repo, "streamctl.config.ts")).catch(() => null)).toBeNull();
   });
 
   // nypm throws plain Errors. `upgrade` has always re-labelled them; `init` did not, so
@@ -440,7 +500,7 @@ describe("runInit", () => {
     const result = await runInit(baseOpts({ install: createInstaller({ confirm: async () => false }) }));
 
     expect(result.sync).toBeNull();
-    expect(await readFile(join(repo, ".streamctl", "config.ts"), "utf8")).toContain(`package: "@acme/payload"`);
+    expect(await readFile(join(repo, "streamctl.config.ts"), "utf8")).toContain(`package: "@acme/payload"`);
     expect(await readFile(join(repo, ".editorconfig")).catch(() => null)).toBeNull();
   });
 });
@@ -476,7 +536,7 @@ describe("runInit (v2 manifest auto-detection)", () => {
     // Profile from `profiles[].detect`, base from `defaultBase`.
     expect(result.profile).toBe("nuxt-4");
     expect(result.base).toBe("nuxt-app");
-    expect(await readFile(join(repo, ".streamctl", "config.ts"), "utf8")).toContain(`profile: "nuxt-4"`);
+    expect(await readFile(join(repo, "streamctl.config.ts"), "utf8")).toContain(`profile: "nuxt-4"`);
     // Detection is never silent: the evidence is logged.
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("detected profile \"nuxt-4\""));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("nuxt ^4.2.0 in devDependencies"));

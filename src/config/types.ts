@@ -48,7 +48,7 @@ export interface ManagedFile {
   shadowedBy?: string[];
 }
 
-/** The per-repo manifest owned by a consuming repo (`.streamctl/config.ts`). */
+/** The per-repo manifest owned by a consuming repo (`streamctl.config.ts`). */
 export interface StreamctlConfig {
   /** The CLI ships no default. */
   package: string;

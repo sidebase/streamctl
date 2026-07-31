@@ -44,7 +44,7 @@ body:
     id: bug-payload
     attributes:
       label: Payload
-      description: The payload package name and the pinned `version` from `.streamctl/config.ts` (plus any relevant config knobs)
+      description: The payload package name and the pinned `version` from your streamctl config -- `streamctl.config.ts`, or `.streamctl/config.ts` on the legacy location (plus any relevant config knobs)
       placeholder: "@your-org/config @ 1.2.3"
     validations:
       required: true

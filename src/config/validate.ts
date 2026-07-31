@@ -72,7 +72,7 @@ function collectStage1(input: unknown): { issues: ConfigIssue[]; rest: Record<st
 function assertNoIssues(issues: ConfigIssue[]): void {
   if (issues.length > 0) {
     const summary = issues.map(issue => `${issue.path}: ${issue.message}`).join("; ");
-    throw new StreamctlError("CONFIG_INVALID", `Invalid .streamctl/config.ts: ${summary}`, { issues });
+    throw new StreamctlError("CONFIG_INVALID", `Invalid streamctl config: ${summary}`, { issues });
   }
 }
 

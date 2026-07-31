@@ -1,5 +1,6 @@
 import type { ZodError } from "zod";
 import { describe, expect, it } from "vitest";
+import { CONFIG_FILE, LEGACY_CONFIG_FILE } from "../src/config/resolve";
 import {
   managedFileSchema,
   payloadManifestSchema,
@@ -21,10 +22,15 @@ function payload(): Record<string, unknown> {
   return { schemaVersion: 2, presets: ["base", "nuxt-app"], profiles: [{ name: "nuxt-4" }], defaultBase: "nuxt-app" };
 }
 
-/** Every issue `path` from a parse that is expected to fail. */
-function issuePaths(input: unknown, schema: { safeParse: (v: unknown) => { success: boolean; error?: ZodError } }): string[] {
+/**
+ * Every issue `path` from a parse that is expected to fail. `label` is passed to the
+ * inner assertion, not just the caller's: a reservation that stops matching makes the
+ * parse *succeed*, so this line is what fails, and a label on the caller's `toContain`
+ * never gets a chance to print.
+ */
+function issuePaths(input: unknown, schema: { safeParse: (v: unknown) => { success: boolean; error?: ZodError } }, label?: string): string[] {
   const result = schema.safeParse(input);
-  expect(result.success).toBe(false);
+  expect(result.success, label).toBe(false);
   return zodToIssues(result.error as ZodError).map(issue => issue.path);
 }
 
@@ -99,6 +105,87 @@ describe("ManagedFile", () => {
 
   it("rejects package.json (owned by the version reconcile)", () => {
     expect(issuePaths({ ...managedFile(), path: "package.json" }, managedFileSchema)).toContain("path");
+  });
+
+  describe("reserved config paths", () => {
+    const reject = (path: string): string[] => issuePaths({ ...managedFile(), path }, managedFileSchema, path);
+    const accepts = (path: string): boolean => managedFileSchema.safeParse({ ...managedFile(), path }).success;
+
+    it("rejects the root config on any extension", () => {
+      for (const path of ["streamctl.config.ts", "streamctl.config.mjs", "streamctl.config.js", "streamctl.config.mts"]) {
+        expect(reject(path), path).toContain("path");
+      }
+    });
+
+    it("rejects anything under the legacy directory", () => {
+      expect(reject(".streamctl/config.ts")).toContain("path");
+      expect(reject(".streamctl/notes.md")).toContain("path");
+    });
+
+    // `./x`, `.//x` and `././x` all reach disk as the same file a bare `x` names, so a
+    // guard that only tests the raw string is bypassed by typing a prefix.
+    it("rejects `./`-prefixed spellings of every reservation", () => {
+      for (const path of [
+        "./streamctl.config.ts",
+        ".//streamctl.config.ts",
+        "././streamctl.config.ts",
+        "./.streamctl/config.ts",
+        ".//.streamctl/config.ts",
+        "./package.json",
+        ".//package.json",
+      ]) {
+        expect(reject(path), path).toContain("path");
+      }
+    });
+
+    // Case-insensitive on purpose: on macOS (by default) and Windows (always) these name
+    // the reserved files, so a payload could manage the config through a case variant and
+    // have `sync` overwrite it. `package.json` is covered by the same normalization.
+    it("rejects case variants of every reservation", () => {
+      for (const path of [
+        "STREAMCTL.CONFIG.TS",
+        "Streamctl.Config.ts",
+        ".STREAMCTL/config.ts",
+        ".Streamctl/notes.md",
+        "PACKAGE.JSON",
+        "./STREAMCTL.CONFIG.TS",
+      ]) {
+        expect(reject(path), path).toContain("path");
+      }
+    });
+
+    // The failure mode of this guard is over-breadth, not absence: a payload's own
+    // wrapper files live in the same root namespace, and `acme.config.ts` is managed by
+    // the synthetic payload much of the suite depends on.
+    // Lowercasing the compared path widens the match by construction, so these are the
+    // cases that bound it.
+    it("still accepts other root-level wrapper configs", () => {
+      for (const path of ["eslint.config.ts", "prisma.config.ts", "acme.config.ts", "ESLint.config.ts"]) {
+        expect(accepts(path), path).toBe(true);
+      }
+    });
+
+    // The schema duplicates these spellings rather than importing them, because the
+    // published `./manifest` entry point must not acquire a path into the loader (which
+    // imports c12). A test has no such constraint, so it can hold the two in agreement:
+    // renaming a constant in `resolve.ts` would otherwise silently un-reserve the path
+    // while this file's own cases kept passing.
+    it("stays in agreement with the resolver's spellings", () => {
+      // `reject` labels its assertions with the path. That matters most here: a rename
+      // reds ~66 tests across six files, all of them "resolution moved" and all green
+      // again once fixtures follow the new spelling. This one stays red until
+      // `CONFIG_STEM` moves too, so it is the last failure standing and the easiest to
+      // mis-read as collateral. The label names the spelling that drifted.
+      expect(reject(`${CONFIG_FILE}.ts`), `${CONFIG_FILE}.ts`).toContain("path");
+      expect(reject(`${LEGACY_CONFIG_FILE}.ts`), `${LEGACY_CONFIG_FILE}.ts`).toContain("path");
+    });
+
+    it("accepts the reserved names outside the invocation directory", () => {
+      expect(accepts("nested/streamctl.config.ts")).toBe(true);
+      // Same stem, different file: only `streamctl.config.<ext>` is reserved.
+      expect(accepts("streamctl.config-guide.md")).toBe(true);
+      expect(accepts("docs/streamctl.config-guide.md")).toBe(true);
+    });
   });
 
   it("rejects projectFields on a non-merge strategy", () => {

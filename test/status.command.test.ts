@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { statusCommand } from "../src/commands/status";
+import { captureStderr } from "./helpers/streams";
 
 type StatusArgs = Parameters<NonNullable<typeof statusCommand.run>>[0];
 
@@ -21,6 +22,8 @@ const TEMPLATES: Record<string, string> = {
   "base/npmrc": "registry=https://example\n",
 };
 
+const CONFIG_BODY = `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "nuxt-4" };\n`;
+
 let repo: string;
 const previousExitCode = process.exitCode;
 const stdout: string[] = [];
@@ -32,8 +35,7 @@ async function makeRepo(): Promise<void> {
   for (const [source, content] of Object.entries(TEMPLATES)) {
     await writeFile(join(pkg, "presets", source), content);
   }
-  await mkdir(join(repo, ".streamctl"), { recursive: true });
-  await writeFile(join(repo, ".streamctl", "config.ts"), `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "nuxt-4" };\n`);
+  await writeFile(join(repo, "streamctl.config.ts"), CONFIG_BODY);
 }
 
 beforeEach(async () => {
@@ -104,9 +106,35 @@ describe("status command", () => {
   });
 
   it("exits 1 when the repo has no config", async () => {
-    await rm(join(repo, ".streamctl"), { recursive: true, force: true });
+    await rm(join(repo, "streamctl.config.ts"), { force: true });
 
     await statusCommand.run?.({ args: {} } as unknown as StatusArgs);
     expect(process.exitCode).toBe(1);
+  });
+
+  // The automated guard on the feature's headline promise: a legacy repo behaves exactly
+  // as it does today. Everything else in the suite checks the new location works; this is
+  // the one that checks the old one did not quietly change. Same repo converted in place
+  // rather than two temp dirs, so the two runs differ in the config's location and in
+  // nothing else — not even the tmpdir name, which would otherwise show up in the diff.
+  it("reports identically from either config location", async () => {
+    await statusCommand.run?.({ args: { json: true } } as unknown as StatusArgs);
+    const fromRoot = JSON.parse(stdout.join("")) as unknown;
+
+    await rm(join(repo, "streamctl.config.ts"));
+    await mkdir(join(repo, ".streamctl"), { recursive: true });
+    await writeFile(join(repo, ".streamctl", "config.ts"), CONFIG_BODY);
+    stdout.length = 0;
+    // Replaces the `beforeEach` stub; `vi.restoreAllMocks()` in `afterEach` undoes both.
+    const stderr = captureStderr();
+
+    await statusCommand.run?.({ args: { json: true } } as unknown as StatusArgs);
+    const fromLegacy = JSON.parse(stdout.join("")) as unknown;
+
+    expect(fromLegacy).toEqual(fromRoot);
+    expect(process.exitCode).toBe(0);
+    // No deprecation notice, no ambiguity warning: the legacy path is supported outright,
+    // so a legacy user sees nothing a root user wouldn't.
+    expect(stderr.join("")).toBe("");
   });
 });

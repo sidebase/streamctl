@@ -33,7 +33,7 @@ const TEMPLATES: Record<string, string> = {
 let repo: string;
 const previousExitCode = process.exitCode;
 
-/** Build a temp consuming repo: installed config payload + a valid .streamctl/config.ts. */
+/** Build a temp consuming repo: installed config payload + a valid streamctl.config.ts. */
 async function makeRepo(): Promise<void> {
   // Keep the lockfile walk inside the fixture (see test/pm.test.ts); a stray
   // lockfile above the tmpdir would print a false stale-lockfile hint.
@@ -44,8 +44,7 @@ async function makeRepo(): Promise<void> {
   for (const [source, content] of Object.entries(TEMPLATES)) {
     await writeFile(join(pkg, "presets", source), content);
   }
-  await mkdir(join(repo, ".streamctl"), { recursive: true });
-  await writeFile(join(repo, ".streamctl", "config.ts"), `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "nuxt-4" };\n`);
+  await writeFile(join(repo, "streamctl.config.ts"), `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "nuxt-4" };\n`);
 }
 
 /** The consumer's `.vscode/settings.json`: `editor` is a string, the payload declares an object. */
@@ -217,14 +216,14 @@ describe("sync + check commands (exit codes)", () => {
     expect(out.join("")).not.toContain(tmpdir());
   });
 
-  // A typo'd profile in .streamctl/config.ts used to resolve the version baseline to
+  // A typo'd profile in streamctl.config.ts used to resolve the version baseline to
   // `{}`, silently disabling reconcile forever behind a soft detect warning.
   it.each([
     { command: "sync", run: async () => syncCommand.run?.({ args: {} } as unknown as SyncArgs) },
     { command: "check", run: async () => checkCommand.run?.({ args: { "fail-on": "drift" } } as unknown as CheckArgs) },
   ])("$command exits 1 on a profile the payload does not declare", async ({ run }) => {
     await writeFile(
-      join(repo, ".streamctl", "config.ts"),
+      join(repo, "streamctl.config.ts"),
       `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "n5" };\n`,
     );
 
@@ -234,7 +233,7 @@ describe("sync + check commands (exit codes)", () => {
 
   it("sync --json names the undeclared profile and the declared ones", async () => {
     await writeFile(
-      join(repo, ".streamctl", "config.ts"),
+      join(repo, "streamctl.config.ts"),
       `export default { package: "@acme/payload", base: "base", version: "${VERSION}", profile: "n5" };\n`,
     );
     const out: string[] = [];

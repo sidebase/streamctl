@@ -22,7 +22,7 @@ export const statusCommand = defineCommand({
     // so a successful run always exits 0. Only a config-load/payload error takes exit-1.
     return executeCommand("status", options.json, async (reporter) => {
       const cwd = process.cwd();
-      const config = await loadStreamctlConfig(cwd);
+      const { config } = await loadStreamctlConfig(cwd, { logger: reporter });
       const payload = await resolvePayload(cwd, config.package, config.version);
       return runStatus(cwd, payload, config, {
         cliVersion: readCliVersion(),
