@@ -1,128 +1,79 @@
 # Release runbook (`@sidebase/streamctl`)
 
-> **Status: `0.1.0` is on the registry, published by hand.** The `Release`
-> workflow (`.github/workflows/release.yml`) has never published, and the
-> one-time setup below is not confirmed done. It stays `workflow_dispatch`-only
-> and scoped to the `release` environment, so every publish is a deliberate
-> manual dispatch.
+> **`0.1.0` is on npm, published by hand.** The `Release on NPM` workflow has
+> never run. One setup item below still blocks it.
 
-`streamctl` publishes to the public npm registry under the `@sidebase` scope. It
-is an intentionally ESM-only package; the published tarball ships only `dist/`.
+ESM-only, published public under the `@sidebase` scope, tarball ships only `dist/`.
 
-## Compatibility contract: `schemaVersion`
+## Blocking: register the trusted publisher
 
-What couples the CLI to a payload is the payload manifest's integer
-**`schemaVersion`** (currently `2`), not the package version.
+There is no publish secret. The workflow authenticates with the OIDC token from
+`id-token: write`, the same tokenless setup as `sidebase/ssm-secrets` and
+`sidebase/nuxt-auth`. npm still has to be told which workflow may publish.
 
-- A CLI major supports exactly one `schemaVersion`. The supported value is exported
-  at the CLI's `./manifest` subpath — the same zod schema a payload validates its
-  presets against.
-- If the running CLI does not support a payload's `schemaVersion`, the user gets a
-  dedicated "payload requires a newer/older streamctl" error rather than a generic
-  `CONFIG_INVALID`. The loader leaves room for per-version migrations later.
-- The config file's `version` pin governs the payload package only, and
-  `CONFIG_VERSION_MISMATCH` compares the installed payload against that pin.
-  `upgrade` moves the payload pin and its devDep, and leaves the CLI version alone.
-
-**Bumping `schemaVersion` is a CLI major.** Ship a CLI major that supports the new
-schema before any payload adopts it, or existing installs break.
-
-## How `--version` is produced
-
-The CLI's `--version` is injected at build time from `package.json`
-(`build.config.ts` rollup replace of the `__STREAMCTL_VERSION__` token). Set the
-version, then build, then publish — the workflow already orders these correctly.
-The JSON envelope (`--json`) is **append-only** (new fields, never renamed or
-removed) so consumer CI that parses it survives CLI upgrades.
-
-## One-time setup
-
-**Not verified as done.** `0.1.0` reached the registry by a manual publish that
-bypassed this workflow, so its presence says nothing about whether the workflow
-can publish. As of writing, `gh api repos/sidebase/streamctl/environments`
-returns zero environments and `gh secret list` is empty, so at minimum step 3 is
-outstanding. Step 2's token may exist as an **org** secret, which is not readable
-without org admin. Confirm before the first dispatch.
-
-A missing environment does not fail loudly: GitHub creates one on demand with no
-protection rules and no secrets, so the run loses its approval gate and reaches
-the publish step with an empty `NODE_AUTH_TOKEN`. It then fails on auth, before
-the push, leaving origin untouched.
-
-1. **npm org / scope.** Create/claim the `@sidebase` org on npmjs.com and add the
-   release machine account. Confirm the package name `@sidebase/streamctl` is free
-   (or owned). `publishConfig.access` is already `public` in `package.json`.
-2. **Token / secret.** Mint an npm **automation** token (bypasses 2FA for CI) with
-   publish rights on `@sidebase`, and store it as the `NPM_TOKEN` secret **on the
-   protected `release` environment** (not repo-wide). The workflow uses OIDC
-   (`id-token: write`) for `--provenance`; provenance additionally requires the
-   repository to be **public**.
-3. **Environment protection.** Add required reviewer(s) to the `release`
-   environment so a dispatch pauses for approval before publish.
+On npmjs.com, package settings for `@sidebase/streamctl`, add a trusted publisher
+for repository `sidebase/streamctl`, workflow `release.yml`. Until then a run
+fails at publish on auth, having changed nothing.
 
 ## Cutting a release
 
-Dispatch the `Release` workflow with the target `X.Y.Z` (no leading `v`) and
-approve the environment gate. The workflow:
+1. Bump `package.json` to `X.Y.Z` and merge to `main`.
+2. `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`
+3. `gh release create vX.Y.Z --title vX.Y.Z --generate-notes`, then **publish**
+   it. A draft triggers nothing.
 
-1. Refuses if the `vX.Y.Z` tag already exists on origin.
-2. Sets `package.json` version to the input, then runs the full gate:
-   `typecheck` → `test` → `lint` → `build`, then `publint` and
-   `attw --pack . --profile esm-only`.
-3. Commits `release: vX.Y.Z` and an annotated `vX.Y.Z` tag.
-4. Publishes with `pnpm publish --access public --provenance`.
-5. Pushes the release commit + tag to `main` **only after** a successful publish,
-   so a failed publish leaves origin untouched.
-6. Creates a GitHub Release for the tag with notes generated from the commit
-   subjects since the previous tag (`gh release create --generate-notes`).
+Publishing runs the workflow: checks out the tag, refuses if the tag and
+`package.json` version disagree, runs `typecheck` / `test` / `lint` / `build`
+plus `publint` and `attw`, then `npm publish --provenance`. A `vX.Y.Z-rc.1` tag
+goes to the `next` dist-tag instead of `latest`.
 
-After the run, verify the published tarball on npm, the `vX.Y.Z` tag, and the
-generated GitHub Release notes.
+Nothing ships until you publish the release, and a failed run leaves the tag and
+release intact, so re-publishing the same release re-runs it. Afterwards, check
+the tarball on npm and that provenance is attached.
 
-Step 6 diffs against the previous tag, so every release needs its predecessor
-tagged or the notes cover the whole history. **`0.1.0` was published outside this
-workflow and left no tag.** `v0.1.0` has since been backfilled onto
-`265809b` (`chore: bump deps (#6)`), the last commit carrying that version, so
-the next release diffs against the right point. Nothing else needs backfilling.
+Two things worth knowing:
 
-The version is an input, not something you edit first. Do not bump
-`package.json` by hand before dispatching: step 2 sets it, and a pre-bumped
-working tree just means the release commit contains no version change.
+- `--generate-notes` diffs against the previous tag. That is why `v0.1.0` was
+  backfilled onto `265809b`; nothing else needs backfilling.
+- `--version` is baked in at build time from `package.json`, so a tag that
+  disagrees would ship a CLI that misreports itself. Hence the check.
+
+## Versioning
+
+What couples the CLI to a payload is the manifest's `schemaVersion` (currently
+`2`), not the package version. A CLI major supports exactly one, exported at the
+`./manifest` subpath. **Bumping it is a CLI major**, and the supporting CLI has
+to ship before any payload adopts it.
+
+The config file's `version` pin governs the payload package only. `upgrade` moves
+that pin and leaves the CLI version alone. The CLI and the payload release on
+their own schedules: **no lockstep and no shared version number**, which is why
+`init` writes the two devDep pins from separate values.
+
+The `--json` envelope is append-only: new fields, never renamed or removed, so
+consumer CI survives upgrades. Use Conventional Commit subjects, with `!` for
+anything that moves that envelope, the exit codes, or `schemaVersion`.
 
 ## Notes for the next release
 
-Include these in the release notes; the rest is generated from commit subjects.
+Generated notes only cover commit subjects, so add these by hand.
 
-- **The config file's default location moved** to `streamctl.config.ts` at the repo
+- **The default config location moved** to `streamctl.config.ts` in the repo
   root. `init` writes it there.
-- **`.streamctl/config.*` keeps working, permanently.** Not deprecated, no warning,
-  no removal planned. Existing repos need to do nothing. A repo that *does* move its
-  config needs this CLI version or newer.
-- **One breaking edge:** a config at `.config/.streamctl/config.ts` resolved before
-  this release and does not now — it raises `NOT_INITIALIZED`. Measured against
-  c12 3.3.4: the old `configFile: ".streamctl/config"` spelling made c12 probe
-  `.config/.streamctl/config`, and the new spelling does not. The form is
-  undocumented and nested, so realistically nobody is on it, but the fix is one
-  command:
+- **`.streamctl/config.*` keeps working, permanently.** Not deprecated, no
+  warning, no removal planned. Existing repos need to do nothing.
+- **One break:** `.config/.streamctl/config.ts` used to resolve through c12's
+  `.config/` convention and now raises `NOT_INITIALIZED`. Fix:
 
   ```sh
   git mv .config/.streamctl/config.ts streamctl.config.ts
   ```
 
-  Nothing else under `.config/` is read by streamctl, before or after this release.
-
-  The affected population is narrower than it reads: below c12 3.2.0 there is no
-  `_configFile`, so the old loader raised `NOT_INITIALIZED` from any location. A
-  repo on this layout was only ever working if its tree resolved c12 >= 3.2.0.
-  The `git mv` is worth doing either way, so the instruction above is not
-  conditional on that.
-- **New warning:** two extensions of the same config at one location
-  (`streamctl.config.js` next to `streamctl.config.ts`) now warn on stderr that one is
-  *shadowed by* the other, naming the one being read. c12's order puts `.js` ahead of
-  `.ts`, which surprises most people. **Nothing is read differently than before** — this
-  is a new diagnostic, not new behaviour, so a repo that sees it needs no migration.
+  Nothing else under `.config/` was ever read. Realistically nobody is affected:
+  the layout is undocumented, and it only ever worked on trees resolving
+  c12 >= 3.2.0.
+- **New warning:** two extensions at one location (`streamctl.config.js` beside
+  `streamctl.config.ts`) now warn on stderr which one is being read, since c12
+  orders `.js` ahead of `.ts`. Nothing is read differently than before, so a repo
+  that sees it needs no migration.
 - Minor bump: new default, no removals.
-
-Use Conventional Commit subjects (and `!` / `BREAKING CHANGE:` for anything that
-moves the `--json` envelope, exit codes, or the manifest `schemaVersion`) so the
-history reads clearly for consumers.
