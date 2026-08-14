@@ -15,6 +15,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Wait a week after a release before PRing it, so pulled/broken versions
+    # never land here.
+    cooldown:
+      default-days: 7
     groups:
       npm-dependencies:
         patterns:
