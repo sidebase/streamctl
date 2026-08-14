@@ -70,6 +70,30 @@ export async function readPackageJson(cwd: string): Promise<ParsedPackageJson | 
   return { raw, value: parsed.value };
 }
 
+/**
+ * The consumer's declared dependencies as one flat map for placeholder `fromDependency`
+ * lookups: `dependencies` shadow `devDependencies` (the reconcile's own priority order),
+ * `{}` when there is no package.json. Built once per run, never per file.
+ */
+export function dependencyMap(pkg: ParsedPackageJson | null): Record<string, string> {
+  const deps: Record<string, string> = {};
+  if (pkg === null) {
+    return deps;
+  }
+  for (const section of ["devDependencies", "dependencies"]) {
+    const entries = pkg.value[section];
+    if (!isPlainObject(entries)) {
+      continue;
+    }
+    for (const [name, spec] of Object.entries(entries)) {
+      if (typeof spec === "string") {
+        deps[name] = spec;
+      }
+    }
+  }
+  return deps;
+}
+
 export type LatestVersionProbe = (cwd: string, packageName: string) => Promise<string | null>;
 
 function isOptedOut(key: string, config: StreamctlConfig): boolean {

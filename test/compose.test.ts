@@ -101,3 +101,32 @@ describe("compose: merge", () => {
     expect(result.reason).toContain("invalid JSONC");
   });
 });
+
+describe("compose: dependency map", () => {
+  const dockerPayload = stubPayload({ "base/Dockerfile": "ARG PRISMA_VERSION=${PRISMA}\n" });
+  const dockerfile: ManagedFile = {
+    path: "Dockerfile",
+    strategy: "full",
+    source: "base/Dockerfile",
+    renderDef: { placeholders: { PRISMA: { configPath: "docker.prismaVersion", fromDependency: "prisma", default: "6.19.1" } } },
+  };
+
+  it("feeds the caller's map into placeholder resolution", async () => {
+    const result = await compose(dockerfile, dockerPayload, null, undefined, { prisma: "^6.19.3" });
+    expect(result).toMatchObject({ status: "composed", targetContent: "ARG PRISMA_VERSION=6.19.3\n" });
+  });
+
+  it("falls back to the placeholder default when the caller passes no map", async () => {
+    const result = await compose(dockerfile, dockerPayload);
+    expect(result).toMatchObject({ status: "composed", targetContent: "ARG PRISMA_VERSION=6.19.1\n" });
+  });
+
+  // `check` diffs its composed bytes against what `sync` wrote, so identical inputs must
+  // produce identical output every time.
+  it("composes byte-identically on repeat", async () => {
+    const deps = { prisma: "^6.19.3" };
+    const first = await compose(dockerfile, dockerPayload, null, undefined, deps);
+    const second = await compose(dockerfile, dockerPayload, null, undefined, deps);
+    expect(first).toEqual(second);
+  });
+});

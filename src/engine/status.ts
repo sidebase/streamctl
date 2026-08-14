@@ -10,7 +10,7 @@ import { contentEquals } from "./jsonc";
 import { resolvePresetChain } from "./manifest";
 import { lockfileExists } from "./pm";
 import { isFileActive, isFileEnabled } from "./render";
-import { checkUpdateAvailable, detectVersionSkew } from "./versions";
+import { checkUpdateAvailable, dependencyMap, detectVersionSkew, readPackageJson } from "./versions";
 import { readFileOrNull } from "./write";
 
 /**
@@ -56,7 +56,7 @@ export interface RunStatusOptions {
 }
 
 /** Classify one managed file's state from a read-only compose (mirrors the sync plan-pass, but writes nothing). */
-async function fileState(file: ManagedFile, payload: PayloadHandle, config: StreamctlConfig, cwd: string): Promise<FileState> {
+async function fileState(file: ManagedFile, payload: PayloadHandle, config: StreamctlConfig, cwd: string, deps: Record<string, string>): Promise<FileState> {
   if (config.files?.[file.path] === "off") {
     return "off";
   }
@@ -65,7 +65,7 @@ async function fileState(file: ManagedFile, payload: PayloadHandle, config: Stre
   }
 
   const current = await readFileOrNull(join(cwd, file.path));
-  const result = await compose(file, payload, current, config);
+  const result = await compose(file, payload, current, config, deps);
 
   if (result.status === "structural-error" || result.status === "marker-error" || result.status === "merge-error") {
     return "fault";
@@ -103,9 +103,12 @@ export async function runStatus(
   // Stage 2: a malformed config here is a hard exit-1.
   validateStreamctlConfigWithKeys(config, configKeys);
 
+  // Read once per run, so `status` composes the same bytes `sync`/`check` do.
+  const deps = dependencyMap(await readPackageJson(cwd));
+
   const files: StatusEntry[] = [];
   for (const file of managedFiles) {
-    files.push({ path: file.path, strategy: file.strategy, state: await fileState(file, payload, config, cwd) });
+    files.push({ path: file.path, strategy: file.strategy, state: await fileState(file, payload, config, cwd, deps) });
   }
 
   const hasEslintConfig = managedFiles.some(file => file.path.endsWith("eslint.config.ts") && isFileActive(file, config));
