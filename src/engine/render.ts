@@ -111,6 +111,41 @@ function resolvePlaceholder(def: Placeholder, config: StreamctlConfig | undefine
 const LEFTOVER_TOKEN_RE = /\$\{(?!\{)([^}]*)\}/g;
 
 /**
+ * Substitution repeats until the output stops changing, so a placeholder value that carries
+ * another placeholder's token resolves whatever order the manifest declares them in. The cap
+ * turns a cyclic manifest (A's value names B, B's names A) into a loud error instead of a
+ * hang; ten levels of nesting is far past anything a payload legitimately needs.
+ */
+const MAX_SUBSTITUTION_PASSES = 10;
+
+/**
+ * Every `${TOKEN}` still in `text`, plus the tokens reachable through the values those name.
+ * A cycle leaves only one of its members in the output at any given pass (the others were
+ * just substituted), so following the values is what lets the error name the whole loop.
+ */
+function unresolvedTokens(text: string, values: ReadonlyMap<string, string>, passthrough: ReadonlySet<string>): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const collect = (source: string): void => {
+    for (const match of source.matchAll(LEFTOVER_TOKEN_RE)) {
+      const name = match[1] ?? "";
+      if (!passthrough.has(name) && !seen.has(name)) {
+        seen.add(name);
+        names.push(name);
+      }
+    }
+  };
+  collect(text);
+  for (let index = 0; index < names.length; index++) {
+    const value = values.get(names[index] ?? "");
+    if (value !== undefined) {
+      collect(value);
+    }
+  }
+  return names.sort().map(name => `\${${name}}`);
+}
+
+/**
  * Assemble fragments in declared order (`toggle` includes when true, `forEach`
  * repeats per `string[]` item as `${ITEM}`), then substitute `${KEY}` placeholders
  * over the assembled result. GitHub `${{ ... }}` expressions pass through untouched.
@@ -157,6 +192,9 @@ export function renderFile(
 
   let output = `${parts.join("\n")}\n`;
 
+  // Values are resolved (and pattern-checked) once, ahead of substitution: they come from
+  // the config and the dependency map, never from the output being assembled.
+  const values = new Map<string, string>();
   for (const [key, def] of Object.entries(renderDef.placeholders ?? {})) {
     const value = resolvePlaceholder(def, config, key, filePath, deps);
     if (def.pattern !== undefined && !new RegExp(def.pattern).test(value)) {
@@ -166,10 +204,37 @@ export function renderFile(
         { file: filePath, placeholder: key, value },
       );
     }
-    output = output.replaceAll(`\${${key}}`, () => value);
+    values.set(key, value);
   }
 
   const passthrough = new Set(renderDef.passthrough ?? []);
+
+  // Callback form: a plain replacement string would honor `$&`/`$1` patterns in the value.
+  // Config values are data and must land verbatim.
+  const substitutePass = (text: string): string => {
+    let next = text;
+    for (const [key, value] of values) {
+      next = next.replaceAll(`\${${key}}`, () => value);
+    }
+    return next;
+  };
+
+  for (let pass = 1; ; pass++) {
+    const next = substitutePass(output);
+    if (next === output) {
+      break; // fixpoint
+    }
+    output = next;
+    if (pass >= MAX_SUBSTITUTION_PASSES) {
+      const tokens = unresolvedTokens(output, values, passthrough);
+      throw new StreamctlError(
+        "CONFIG_INVALID",
+        `render for "${filePath}" did not stabilize after ${MAX_SUBSTITUTION_PASSES} substitution passes; still unresolved: ${tokens.join(", ")}. A placeholder value references itself, directly or through another placeholder.`,
+        { file: filePath, tokens, passes: MAX_SUBSTITUTION_PASSES },
+      );
+    }
+  }
+
   for (const match of output.matchAll(LEFTOVER_TOKEN_RE)) {
     const token = match[0];
     const name = match[1] ?? "";

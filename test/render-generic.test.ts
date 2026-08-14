@@ -165,6 +165,90 @@ describe("renderFile: fromDependency", () => {
   });
 });
 
+describe("renderFile: nested placeholder tokens", () => {
+  const thrown = (run: () => unknown): StreamctlError => {
+    const error = (() => {
+      try {
+        run();
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(error).toBeInstanceOf(StreamctlError);
+    return error as StreamctlError;
+  };
+
+  // Substitution used to be a single pass in manifest key order, so this resolved or not
+  // depending on which key came first — an invisible trap for the payload author.
+  it("resolves a token inside a value whichever order the keys are declared in", () => {
+    const inner = { configPath: "ci.prismaVersion", default: "6.19.1" };
+    const outer = { configPath: "ci.prismaRuntime", default: "RUN npm i -D prisma@${INNER}" };
+
+    const innerFirst: RenderDef = { placeholders: { INNER: inner, OUTER: outer } };
+    const outerFirst: RenderDef = { placeholders: { OUTER: outer, INNER: inner } };
+    expect(renderFile("${OUTER}\n", innerFirst, cfg(), {})).toBe("RUN npm i -D prisma@6.19.1\n");
+    expect(renderFile("${OUTER}\n", outerFirst, cfg(), {})).toBe("RUN npm i -D prisma@6.19.1\n");
+  });
+
+  it("resolves a chain several levels deep", () => {
+    const def: RenderDef = {
+      placeholders: {
+        A: { configPath: "ci.a", default: "a-${B}" },
+        B: { configPath: "ci.b", default: "b-${C}" },
+        C: { configPath: "ci.c", default: "c" },
+      },
+    };
+    expect(renderFile("${A}\n", def, cfg(), {})).toBe("a-b-c\n");
+  });
+
+  it("a two-node cycle fails loud, naming the file and both tokens", () => {
+    const def: RenderDef = {
+      placeholders: {
+        A: { configPath: "ci.a", default: "a ${B}" },
+        B: { configPath: "ci.b", default: "b ${A}" },
+      },
+    };
+    const error = thrown(() => renderFile("${A}\n", def, cfg(), {}, "Dockerfile"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain("Dockerfile");
+    expect(error.message).toContain("did not stabilize");
+    expect(error.details).toMatchObject({ file: "Dockerfile", tokens: ["${A}", "${B}"], passes: 10 });
+  });
+
+  it("a self-referencing config value fails rather than looping", () => {
+    const def: RenderDef = { placeholders: { SELF: { configPath: "ci.self", default: "" } } };
+    const error = thrown(() => renderFile("v: ${SELF}\n", def, cfg({ ci: { self: "x ${SELF}" } }), {}, "f"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain("${SELF}");
+  });
+
+  // The base-config dockerfile render in miniature: the runtime block's default embeds the
+  // build-time ARG, which the template owns and the renderer must not touch.
+  it("leaves a passthrough token inside a placeholder value verbatim", () => {
+    const def: RenderDef = {
+      placeholders: {
+        DOCKER_PRISMA_RUNTIME: {
+          configPath: "docker.prismaRuntime",
+          default: "ARG PRISMA_VERSION=6.19.1\nRUN npm i -D prisma@${PRISMA_VERSION}",
+        },
+      },
+      passthrough: ["PRISMA_VERSION"],
+    };
+    expect(renderFile("${DOCKER_PRISMA_RUNTIME}\n", def, cfg(), {}, "Dockerfile"))
+      .toBe("ARG PRISMA_VERSION=6.19.1\nRUN npm i -D prisma@${PRISMA_VERSION}\n");
+  });
+
+  it("substitutes a value containing $-patterns verbatim across passes", () => {
+    const def: RenderDef = {
+      placeholders: {
+        OUTER: { configPath: "ci.outer", default: "[${INNER}]" },
+        INNER: { configPath: "ci.inner", default: "" },
+      },
+    };
+    expect(renderFile("v: ${OUTER}\n", def, cfg({ ci: { inner: "$& $1 $$" } }), {})).toBe("v: [$& $1 $$]\n");
+  });
+});
+
 describe("renderFile: fragments", () => {
   const frags = { a: "FRAG-A", b: "FRAG-B", c: "FRAG-C" };
   const def: RenderDef = {
