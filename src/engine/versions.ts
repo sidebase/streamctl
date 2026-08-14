@@ -70,6 +70,30 @@ export async function readPackageJson(cwd: string): Promise<ParsedPackageJson | 
   return { raw, value: parsed.value };
 }
 
+/**
+ * The consumer's declared dependencies as one flat map for placeholder `fromDependency`
+ * lookups: `dependencies` shadow `devDependencies` (the reconcile's own priority order),
+ * `{}` when there is no package.json. Built once per run, never per file.
+ */
+export function dependencyMap(pkg: ParsedPackageJson | null): Record<string, string> {
+  const deps: Record<string, string> = {};
+  if (pkg === null) {
+    return deps;
+  }
+  for (const section of ["devDependencies", "dependencies"]) {
+    const entries = pkg.value[section];
+    if (!isPlainObject(entries)) {
+      continue;
+    }
+    for (const [name, spec] of Object.entries(entries)) {
+      if (typeof spec === "string") {
+        deps[name] = spec;
+      }
+    }
+  }
+  return deps;
+}
+
 export type LatestVersionProbe = (cwd: string, packageName: string) => Promise<string | null>;
 
 function isOptedOut(key: string, config: StreamctlConfig): boolean {
@@ -359,8 +383,11 @@ function isSemverCore(value: string): boolean {
  * Extracts the comparable minimum of a version specifier: strips a leading range operator or a
  * `packageManager` pin's `<tool>@` prefix, returning the bare semver core. `null` when unparseable
  * (git/URL/tag/alias), so callers fall back to exact-string comparison rather than guess a direction.
+ *
+ * Exported for `engine/render.ts`, which floors a `fromDependency` pin with it. Mind that a
+ * partial range yields a partial core (`^6` → `"6"`), which that caller rejects.
  */
-function parseRangeMin(spec: string): string | null {
+export function parseRangeMin(spec: string): string | null {
   // a protocol/alias spec (file:, link:, npm:foo@1.2.3, git:...) has no
   // orderable min - its `@` is an alias delimiter, not a version pin
   if (/^[a-z][a-z0-9+.-]*:/i.test(spec.trim())) {

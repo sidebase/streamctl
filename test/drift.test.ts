@@ -3,8 +3,17 @@ import type { PayloadHandle } from "../src/payload/resolve";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { detectDrift } from "../src/engine/drift";
+import { readFileOrNull } from "../src/engine/write";
+import { StreamctlError } from "../src/errors";
+
+// Pass-through spy: behavior is the actual implementation, we only count the reads so a
+// per-file package.json read can never creep back in.
+vi.mock("../src/engine/write", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/engine/write")>();
+  return { ...actual, readFileOrNull: vi.fn(actual.readFileOrNull) };
+});
 
 const config: StreamctlConfig = { package: "@acme/payload", base: "nuxt-app", version: "1.0.0", profile: "nuxt-4" };
 
@@ -114,5 +123,92 @@ describe("detectDrift", () => {
     await write(".editorconfig", "root = false\n");
     const report = await detectDrift([FULL], payload, { ...config, files: { ".editorconfig": "off" } }, root);
     expect(report).toEqual({ inSync: true, drift: [], structuralFaults: [] });
+  });
+});
+
+describe("detectDrift: dependency-derived renders", () => {
+  const dockerPayload: PayloadHandle = {
+    version: "1.0.0",
+    async read(source) {
+      if (source !== "base/Dockerfile") {
+        throw new Error(`missing fixture source: ${source}`);
+      }
+      return "ARG PRISMA_VERSION=${PRISMA}\n";
+    },
+    async list() {
+      return [];
+    },
+  };
+  const DOCKERFILE: ManagedFile = {
+    path: "Dockerfile",
+    strategy: "full",
+    source: "base/Dockerfile",
+    renderDef: { placeholders: { PRISMA: { configPath: "docker.prismaVersion", fromDependency: "prisma", default: "6.19.1" } } },
+  };
+
+  const pkg = (deps: Record<string, Record<string, string>>): string => JSON.stringify({ name: "consumer", ...deps }, null, 2);
+
+  it("composes against the repo's pin", async () => {
+    await write("package.json", pkg({ devDependencies: { prisma: "^6.19.3" } }));
+    await write("Dockerfile", "ARG PRISMA_VERSION=6.19.3\n");
+    expect(await detectDrift([DOCKERFILE], dockerPayload, config, root)).toEqual({ inSync: true, drift: [], structuralFaults: [] });
+  });
+
+  // The point of the feature: a prisma bump makes the committed Dockerfile stale, and
+  // `check` is what says so.
+  it("reports drift once the pin moves ahead of the rendered file", async () => {
+    await write("package.json", pkg({ devDependencies: { prisma: "^6.20.0" } }));
+    await write("Dockerfile", "ARG PRISMA_VERSION=6.19.3\n");
+    const report = await detectDrift([DOCKERFILE], dockerPayload, config, root);
+    expect(report.drift).toEqual([{ path: "Dockerfile", kind: "content" }]);
+  });
+
+  it("dependencies shadow devDependencies", async () => {
+    await write("package.json", pkg({ dependencies: { prisma: "6.21.0" }, devDependencies: { prisma: "^6.19.3" } }));
+    await write("Dockerfile", "ARG PRISMA_VERSION=6.21.0\n");
+    expect(await detectDrift([DOCKERFILE], dockerPayload, config, root)).toEqual({ inSync: true, drift: [], structuralFaults: [] });
+  });
+
+  it("uses the placeholder default in a repo with no package.json", async () => {
+    await write("Dockerfile", "ARG PRISMA_VERSION=6.19.1\n");
+    expect(await detectDrift([DOCKERFILE], dockerPayload, config, root)).toEqual({ inSync: true, drift: [], structuralFaults: [] });
+  });
+
+  // Same strict parser the version paths already used; render paths now surface it too.
+  it("fails loud on a malformed package.json", async () => {
+    await write("package.json", "{ not json");
+    await write("Dockerfile", "ARG PRISMA_VERSION=6.19.1\n");
+    const error = await detectDrift([DOCKERFILE], dockerPayload, config, root).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(StreamctlError);
+    expect((error as StreamctlError).code).toBe("CONFIG_INVALID");
+    expect((error as StreamctlError).message).toContain("package.json is not valid JSON");
+  });
+});
+
+describe("detectDrift package.json reads", () => {
+  const dockerPayload: PayloadHandle = {
+    version: "1.0.0",
+    async read() {
+      return "ARG PRISMA_VERSION=${PRISMA}\n";
+    },
+    async list() {
+      return [];
+    },
+  };
+  const renderDef = { placeholders: { PRISMA: { configPath: "docker.prismaVersion", fromDependency: "prisma", default: "6.19.1" } } };
+
+  it("reads package.json once per run, not once per file", async () => {
+    await write("package.json", JSON.stringify({ name: "consumer", devDependencies: { prisma: "^6.19.3" } }));
+    const files: ManagedFile[] = Array.from({ length: 4 }, (_, index) => ({
+      path: `Dockerfile.${index}`,
+      strategy: "full",
+      source: "base/Dockerfile",
+      renderDef,
+    }));
+
+    vi.mocked(readFileOrNull).mockClear();
+    await detectDrift(files, dockerPayload, config, root);
+    const pkgReads = vi.mocked(readFileOrNull).mock.calls.filter(([path]) => path.endsWith("package.json"));
+    expect(pkgReads).toHaveLength(1);
   });
 });

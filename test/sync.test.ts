@@ -512,3 +512,46 @@ describe("runSync batch decider", () => {
     expect(result.written.sort()).toEqual([".editorconfig", ".npmrc"]);
   });
 });
+
+describe("runSync dependency map", () => {
+  const dockerPayload: PayloadHandle = {
+    version: "1.0.0",
+    async read(source) {
+      if (!source.startsWith("base/Dockerfile")) {
+        throw new Error(`missing fixture source: ${source}`);
+      }
+      return "ARG PRISMA_VERSION=${PRISMA}\n";
+    },
+    async list() {
+      return [];
+    },
+  };
+  const renderDef = { placeholders: { PRISMA: { configPath: "docker.prismaVersion", fromDependency: "prisma", default: "6.19.1" } } };
+  const DOCKER_FILES: ManagedFile[] = [
+    { path: "Dockerfile", strategy: "full", source: "base/Dockerfile", renderDef },
+    { path: "Dockerfile.worker", strategy: "full", source: "base/Dockerfile.worker", renderDef },
+  ];
+
+  it("writes the pin-derived value", async () => {
+    await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "consumer", devDependencies: { prisma: "^6.19.3" } }));
+    await runSync({ cwd, payload: dockerPayload, config, managedFiles: DOCKER_FILES });
+    expect(await readFile(join(cwd, "Dockerfile"), "utf8")).toBe("ARG PRISMA_VERSION=6.19.3\n");
+    expect(await readFile(join(cwd, "Dockerfile.worker"), "utf8")).toBe("ARG PRISMA_VERSION=6.19.3\n");
+  });
+
+  // The map is read once per run, not per file: it feeds rendering AND the reconcile, and
+  // `versionSync: false` only opts out of the latter.
+  it("still derives the value when versionSync is off", async () => {
+    await writeFile(join(cwd, "package.json"), JSON.stringify({ name: "consumer", devDependencies: { prisma: "^6.19.3" } }));
+    await runSync({ cwd, payload: dockerPayload, config: { ...config, versionSync: false }, managedFiles: DOCKER_FILES });
+    expect(await readFile(join(cwd, "Dockerfile"), "utf8")).toBe("ARG PRISMA_VERSION=6.19.3\n");
+  });
+
+  it("refuses to write anything when package.json is malformed", async () => {
+    await writeFile(join(cwd, "package.json"), "{ not json");
+    const error = await runSync({ cwd, payload: dockerPayload, config, managedFiles: DOCKER_FILES }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(StreamctlError);
+    expect((error as StreamctlError).code).toBe("CONFIG_INVALID");
+    expect(await exists("Dockerfile")).toBe(false);
+  });
+});

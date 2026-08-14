@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { validateStreamctlConfig } from "../src/config/validate";
 import { detectDrift } from "../src/engine/drift";
 import { isFileEnabled, readConfigPath, renderFile } from "../src/engine/render";
 import { runSync } from "../src/engine/sync";
@@ -97,6 +98,154 @@ describe("renderFile: placeholders", () => {
     // A `;` is harmless on its own line; it is not a shell interpolation there.
     const def: RenderDef = { placeholders: { ENVS: { configPath: "aptPackages", default: "", join: "lines" } } };
     expect(renderFile("${ENVS}\n", def, cfg({ aptPackages: ["A=1;2", "B=3"] }), {})).toBe("A=1;2\nB=3\n");
+  });
+});
+
+describe("renderFile: fromDependency", () => {
+  const def: RenderDef = { placeholders: { PRISMA: { configPath: "docker.prismaVersion", fromDependency: "prisma", default: "6.19.1" } } };
+  // `docker` is a payload knob, not a CLI-universal key, so it reaches the engine the way a
+  // real config does: through the loose stage-1 validation.
+  const withDocker = (prismaVersion: string): StreamctlConfig => validateStreamctlConfig({ ...cfg(), docker: { prismaVersion } });
+  const render = (config: StreamctlConfig, deps: Record<string, string>): string =>
+    renderFile("ARG PRISMA_VERSION=${PRISMA}\n", def, config, {}, "Dockerfile", deps);
+
+  it("prefers the config value over the dependency pin", () => {
+    expect(render(withDocker("6.20.0"), { prisma: "^6.19.3" })).toBe("ARG PRISMA_VERSION=6.20.0\n");
+  });
+
+  it("prefers the dependency floor over the static default", () => {
+    expect(render(cfg(), { prisma: "^6.19.3" })).toBe("ARG PRISMA_VERSION=6.19.3\n");
+  });
+
+  it("falls back to the default when the dependency is absent", () => {
+    expect(render(cfg(), {})).toBe("ARG PRISMA_VERSION=6.19.1\n");
+  });
+
+  it("floors the common range spellings, prereleases included", () => {
+    for (const [spec, expected] of [
+      ["^6.19.3", "6.19.3"],
+      ["~6.19.3", "6.19.3"],
+      [">=6.19.3", "6.19.3"],
+      ["6.19.1", "6.19.1"],
+      ["v6.19.1", "6.19.1"],
+      ["6.20.0-rc.1", "6.20.0-rc.1"],
+      ["^6.20.0-rc.1", "6.20.0-rc.1"],
+    ] as const) {
+      expect(render(cfg(), { prisma: spec }), spec).toBe(`ARG PRISMA_VERSION=${expected}\n`);
+    }
+  });
+
+  // A partial core would let the same commit render different bytes as the registry moves,
+  // which breaks both image reproducibility and the `check` drift gate.
+  it("falls back to the default for anything that is not a full triple", () => {
+    for (const spec of ["^6", "~1.2", "6", "6.19", "*", "latest", "workspace:*", "file:../prisma", "npm:@acme/prisma@6.19.3", "git+https://github.com/prisma/prisma.git#v6.19.3"]) {
+      expect(render(cfg(), { prisma: spec }), spec).toBe("ARG PRISMA_VERSION=6.19.1\n");
+    }
+  });
+
+  it("validates `pattern` against the derived value like any other", () => {
+    const patterned: RenderDef = {
+      placeholders: { PRISMA: { configPath: "docker.prismaVersion", fromDependency: "prisma", default: "6.19.1", pattern: "^6\\.19\\.\\d+$" } },
+    };
+    const error = (() => {
+      try {
+        renderFile("ARG PRISMA_VERSION=${PRISMA}\n", patterned, cfg(), {}, "Dockerfile", { prisma: "^7.0.0" });
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(error).toBeInstanceOf(StreamctlError);
+    expect((error as StreamctlError).code).toBe("CONFIG_INVALID");
+    expect((error as StreamctlError).details).toMatchObject({ file: "Dockerfile", placeholder: "PRISMA", value: "7.0.0" });
+  });
+
+  // Every existing caller omits the argument; it must resolve exactly as it did before.
+  it("resolves to the default when the caller passes no deps at all", () => {
+    expect(renderFile("ARG PRISMA_VERSION=${PRISMA}\n", def, cfg(), {})).toBe("ARG PRISMA_VERSION=6.19.1\n");
+  });
+});
+
+describe("renderFile: nested placeholder tokens", () => {
+  const thrown = (run: () => unknown): StreamctlError => {
+    const error = (() => {
+      try {
+        run();
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(error).toBeInstanceOf(StreamctlError);
+    return error as StreamctlError;
+  };
+
+  // Substitution used to be a single pass in manifest key order, so this resolved or not
+  // depending on which key came first — an invisible trap for the payload author.
+  it("resolves a token inside a value whichever order the keys are declared in", () => {
+    const inner = { configPath: "ci.prismaVersion", default: "6.19.1" };
+    const outer = { configPath: "ci.prismaRuntime", default: "RUN npm i -D prisma@${INNER}" };
+
+    const innerFirst: RenderDef = { placeholders: { INNER: inner, OUTER: outer } };
+    const outerFirst: RenderDef = { placeholders: { OUTER: outer, INNER: inner } };
+    expect(renderFile("${OUTER}\n", innerFirst, cfg(), {})).toBe("RUN npm i -D prisma@6.19.1\n");
+    expect(renderFile("${OUTER}\n", outerFirst, cfg(), {})).toBe("RUN npm i -D prisma@6.19.1\n");
+  });
+
+  it("resolves a chain several levels deep", () => {
+    const def: RenderDef = {
+      placeholders: {
+        A: { configPath: "ci.a", default: "a-${B}" },
+        B: { configPath: "ci.b", default: "b-${C}" },
+        C: { configPath: "ci.c", default: "c" },
+      },
+    };
+    expect(renderFile("${A}\n", def, cfg(), {})).toBe("a-b-c\n");
+  });
+
+  it("a two-node cycle fails loud, naming the file and both tokens", () => {
+    const def: RenderDef = {
+      placeholders: {
+        A: { configPath: "ci.a", default: "a ${B}" },
+        B: { configPath: "ci.b", default: "b ${A}" },
+      },
+    };
+    const error = thrown(() => renderFile("${A}\n", def, cfg(), {}, "Dockerfile"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain("Dockerfile");
+    expect(error.message).toContain("did not stabilize");
+    expect(error.details).toMatchObject({ file: "Dockerfile", tokens: ["${A}", "${B}"], passes: 10 });
+  });
+
+  it("a self-referencing config value fails rather than looping", () => {
+    const def: RenderDef = { placeholders: { SELF: { configPath: "ci.self", default: "" } } };
+    const error = thrown(() => renderFile("v: ${SELF}\n", def, cfg({ ci: { self: "x ${SELF}" } }), {}, "f"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain("${SELF}");
+  });
+
+  // The base-config dockerfile render in miniature: the runtime block's default embeds the
+  // build-time ARG, which the template owns and the renderer must not touch.
+  it("leaves a passthrough token inside a placeholder value verbatim", () => {
+    const def: RenderDef = {
+      placeholders: {
+        DOCKER_PRISMA_RUNTIME: {
+          configPath: "docker.prismaRuntime",
+          default: "ARG PRISMA_VERSION=6.19.1\nRUN npm i -D prisma@${PRISMA_VERSION}",
+        },
+      },
+      passthrough: ["PRISMA_VERSION"],
+    };
+    expect(renderFile("${DOCKER_PRISMA_RUNTIME}\n", def, cfg(), {}, "Dockerfile"))
+      .toBe("ARG PRISMA_VERSION=6.19.1\nRUN npm i -D prisma@${PRISMA_VERSION}\n");
+  });
+
+  it("substitutes a value containing $-patterns verbatim across passes", () => {
+    const def: RenderDef = {
+      placeholders: {
+        OUTER: { configPath: "ci.outer", default: "[${INNER}]" },
+        INNER: { configPath: "ci.inner", default: "" },
+      },
+    };
+    expect(renderFile("v: ${OUTER}\n", def, cfg({ ci: { inner: "$& $1 $$" } }), {})).toBe("v: [$& $1 $$]\n");
   });
 });
 

@@ -10,7 +10,7 @@ import { dirtyTrackedPaths } from "./git";
 import { contentEquals } from "./jsonc";
 import { lockfileExists } from "./pm";
 import { isFileActive, isFileEnabled } from "./render";
-import { applyReconcile, planReconcile, readPackageJson } from "./versions";
+import { applyReconcile, dependencyMap, planReconcile, readPackageJson } from "./versions";
 import { atomicWrite, readFileOrNull } from "./write";
 
 /**
@@ -202,11 +202,18 @@ export async function runSync(opts: RunSyncOptions): Promise<SyncResult> {
     activeFiles.push(file);
   }
 
+  // Read once per run, ahead of the plan pass: renders resolve placeholder
+  // `fromDependency` against it, and the reconcile below reuses the same parse. A
+  // malformed package.json therefore throws CONFIG_INVALID before any managed write —
+  // now also when `versionSync` is off, since rendering needs it either way.
+  const parsedPkg = await readPackageJson(cwd);
+  const deps = dependencyMap(parsedPkg);
+
   // Plan pass: compose and validate everything, write nothing.
   for (const file of activeFiles) {
     const abs = join(cwd, file.path);
     const current = await readFileOrNull(abs);
-    const result = await compose(file, payload, current, config);
+    const result = await compose(file, payload, current, config, deps);
 
     // Never write output that does not parse. `--force` cannot fix corrupt output.
     if (result.status === "structural-error") {
@@ -247,12 +254,6 @@ export async function runSync(opts: RunSyncOptions): Promise<SyncResult> {
     onPreview?.(change);
     pending.push({ change, abs, content: result.targetContent, file });
   }
-
-  // Still the plan pass. A malformed package.json throws CONFIG_INVALID here, before
-  // any managed write, rather than inside the post-write reconcile, which would leave
-  // managed files already on disk. Threaded into `planReconcile` so the file is
-  // read once per run.
-  const parsedPkg = config.versionSync === false ? null : await readPackageJson(cwd);
 
   // jiti is reconciled only for an ACTIVE eslint.config.ts: a file turned off or gated
   // out by `enabledBy` is not managed here, so its version key must not move either.

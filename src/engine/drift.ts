@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { compose } from "./compose";
 import { contentEquals } from "./jsonc";
 import { isFileEnabled } from "./render";
+import { dependencyMap, readPackageJson } from "./versions";
 import { readFileOrNull } from "./write";
 
 export type DriftKind = "content" | "missing" | "extra";
@@ -48,6 +49,9 @@ export async function detectDrift(
 ): Promise<DriftReport> {
   const drift: DriftEntry[] = [];
   const structuralFaults: StructuralFault[] = [];
+  // Read once per run: every file composes against the same dependency snapshot, which is
+  // what keeps `check` byte-identical to `sync`.
+  const deps = dependencyMap(await readPackageJson(cwd));
 
   for (const file of managedFiles) {
     // `files: off` opt-out, or a v2 `enabledBy` gate that is false, means not managed.
@@ -56,7 +60,7 @@ export async function detectDrift(
     }
 
     const current = await readFileOrNull(join(cwd, file.path));
-    const result = await compose(file, payload, current, config);
+    const result = await compose(file, payload, current, config, deps);
 
     if (result.status === "structural-error") {
       structuralFaults.push({ path: result.path, reason: result.reason });

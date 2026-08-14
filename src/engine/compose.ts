@@ -41,7 +41,7 @@ function finalizeComposed(
 }
 
 // Fragment sources are read from the payload here so `renderFile` itself stays pure.
-async function renderManagedTemplate(file: ManagedFile, payload: PayloadHandle, config?: StreamctlConfig): Promise<string> {
+async function renderManagedTemplate(file: ManagedFile, payload: PayloadHandle, config: StreamctlConfig | undefined, deps: Record<string, string>): Promise<string> {
   const raw = await payload.read(file.source);
   if (file.renderDef === undefined) {
     return raw;
@@ -52,16 +52,18 @@ async function renderManagedTemplate(file: ManagedFile, payload: PayloadHandle, 
       fragmentSources[fragment.source] = await payload.read(fragment.source);
     }
   }
-  return renderFile(raw, file.renderDef, config, fragmentSources, file.path);
+  return renderFile(raw, file.renderDef, config, fragmentSources, file.path, deps);
 }
 
+/** `deps` is the consumer's dependency map (see `dependencyMap`), built once per run by the caller and fed to placeholder `fromDependency` resolution. */
 export async function compose(
   file: ManagedFile,
   payload: PayloadHandle,
   currentContent: string | null = null,
   config?: StreamctlConfig,
+  deps: Record<string, string> = {},
 ): Promise<ComposeResult> {
-  const template = await renderManagedTemplate(file, payload, config);
+  const template = await renderManagedTemplate(file, payload, config, deps);
 
   switch (file.strategy) {
     case "full":

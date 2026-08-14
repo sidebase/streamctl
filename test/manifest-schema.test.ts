@@ -7,6 +7,7 @@ import {
   presetManifestSchema,
   renderDefSchema,
   SUPPORTED_SCHEMA_VERSION,
+  SUPPORTED_SCHEMA_VERSIONS,
   zodToIssues,
 } from "../src/manifest/schema";
 
@@ -225,6 +226,18 @@ describe("RenderDef", () => {
     expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", join: "csv" } } }).success).toBe(false);
   });
 
+  // The version gate lives in the loader (it needs the payload manifest); the schema only
+  // owns the shape, so a v2 payload's placeholder still parses here.
+  it("accepts a placeholder that derives from a dependency pin", () => {
+    const placeholder = { configPath: "docker.prismaVersion", fromDependency: "prisma", default: "6.19.1" };
+    expect(renderDefSchema.safeParse({ placeholders: { PRISMA_VERSION_DEFAULT: placeholder } }).success).toBe(true);
+  });
+
+  it("rejects an empty or non-string fromDependency", () => {
+    expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", fromDependency: "", default: "" } } }).success).toBe(false);
+    expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", fromDependency: 1, default: "" } } }).success).toBe(false);
+  });
+
   it("accepts a passthrough token list", () => {
     expect(renderDefSchema.safeParse({ passthrough: ["PRISMA_VERSION", "OTHER"] }).success).toBe(true);
   });
@@ -270,14 +283,24 @@ describe("PresetManifest", () => {
 });
 
 describe("PayloadManifest schemaVersion contract", () => {
-  it(`accepts exactly schemaVersion ${SUPPORTED_SCHEMA_VERSION}`, () => {
-    expect(payloadManifestSchema.safeParse(payload()).success).toBe(true);
+  it("accepts every supported version", () => {
+    for (const version of SUPPORTED_SCHEMA_VERSIONS) {
+      expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: version }).success, String(version)).toBe(true);
+    }
   });
 
-  // Plain literal failure here; the loader is what turns it into SCHEMA_UNSUPPORTED.
+  // The exported constant is base-config's `validate-presets.mjs` contract: it writes this
+  // value into new payloads, so it has to be the current one, not just a supported one.
+  it("names the current version, which is supported", () => {
+    expect(SUPPORTED_SCHEMA_VERSION).toBe(3);
+    expect(SUPPORTED_SCHEMA_VERSIONS.has(SUPPORTED_SCHEMA_VERSION)).toBe(true);
+  });
+
+  // Plain refinement failure here; the loader is what turns it into SCHEMA_UNSUPPORTED.
   it("rejects anything older or newer", () => {
     expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 1 }).success).toBe(false);
-    expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 3 }).success).toBe(false);
+    expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 4 }).success).toBe(false);
+    expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 2.5 }).success).toBe(false);
   });
 
   it("rejects an unknown top-level key", () => {
