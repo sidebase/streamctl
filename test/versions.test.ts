@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCheck } from "../src/engine/check";
-import { checkUpdateAvailable, detectVersionSkew, reconcileVersions } from "../src/engine/versions";
+import { checkUpdateAvailable, detectVersionSkew, parseRangeMin, reconcileVersions } from "../src/engine/versions";
 import { StreamctlError } from "../src/errors";
 import { exitCodeFor } from "../src/exit-codes";
 
@@ -670,6 +670,34 @@ describe("detectVersionSkew", () => {
     const skew = await detectVersionSkew({ cwd, config, baseline: { "engines.pnpm": ">=10.29.0" }, hasEslintConfig: true });
     // Otherwise `check` goes red and prompts for a downgrade nobody wants.
     expect(skew).toEqual([]);
+  });
+});
+
+// Exported for `engine/render.ts`'s `fromDependency` floor, so its contract — including the
+// partial cores that caller has to reject — is pinned here.
+describe("parseRangeMin", () => {
+  it("strips range operators and a leading v", () => {
+    expect(parseRangeMin("^6.19.3")).toBe("6.19.3");
+    expect(parseRangeMin("~6.19.3")).toBe("6.19.3");
+    expect(parseRangeMin(">=6.19.3")).toBe("6.19.3");
+    expect(parseRangeMin("v6.19.3")).toBe("6.19.3");
+    expect(parseRangeMin("6.19.3")).toBe("6.19.3");
+    expect(parseRangeMin("6.20.0-rc.1")).toBe("6.20.0-rc.1");
+  });
+
+  it("keeps a `<tool>@<version>` pin's version", () => {
+    expect(parseRangeMin("pnpm@10.29.1")).toBe("10.29.1");
+  });
+
+  it("returns a PARTIAL core for a partial range", () => {
+    expect(parseRangeMin("^6")).toBe("6");
+    expect(parseRangeMin("~1.2")).toBe("1.2");
+  });
+
+  it("returns null for protocol, alias and unorderable specs", () => {
+    for (const spec of ["workspace:*", "file:../prisma", "npm:@acme/prisma@6.19.3", "git+https://github.com/prisma/prisma.git#v6.19.3", "latest", "*", "^9 || ^10"]) {
+      expect(parseRangeMin(spec), spec).toBeNull();
+    }
   });
 });
 

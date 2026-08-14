@@ -359,8 +359,11 @@ function isSemverCore(value: string): boolean {
  * Extracts the comparable minimum of a version specifier: strips a leading range operator or a
  * `packageManager` pin's `<tool>@` prefix, returning the bare semver core. `null` when unparseable
  * (git/URL/tag/alias), so callers fall back to exact-string comparison rather than guess a direction.
+ *
+ * Exported for `engine/render.ts`, which floors a `fromDependency` pin with it. Mind that a
+ * partial range yields a partial core (`^6` → `"6"`), which that caller rejects.
  */
-function parseRangeMin(spec: string): string | null {
+export function parseRangeMin(spec: string): string | null {
   // a protocol/alias spec (file:, link:, npm:foo@1.2.3, git:...) has no
   // orderable min - its `@` is an alias delimiter, not a version pin
   if (/^[a-z][a-z0-9+.-]*:/i.test(spec.trim())) {

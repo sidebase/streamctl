@@ -2,6 +2,7 @@ import type { ManagedFile, StreamctlConfig } from "../config/types";
 import type { Placeholder, RenderDef } from "../manifest/schema";
 import { StreamctlError } from "../errors";
 import { isIndexable } from "./jsonc";
+import { parseRangeMin } from "./versions";
 
 // Generic renderer (v2): manifest-driven placeholders, fragments, enabledBy gates.
 // Pure and deterministic, so output is byte-stable and a re-sync is idempotent.
@@ -47,8 +48,32 @@ function configStringList(config: StreamctlConfig | undefined, path: string): st
 // A floor, independent of the payload's optional `pattern`.
 const SHELL_META_RE = /[\s;|&$`<>(){}\\'"*?[\]]/;
 
-/** Resolve a placeholder to its substitution string: config value, falling back to `default`; `string[]` gets deduped, sorted, and joined. */
-function resolvePlaceholder(def: Placeholder, config: StreamctlConfig | undefined, key: string, filePath: string): string {
+/** A full `x.y.z` triple with an optional prerelease tail. */
+const FULL_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9a-z.-]+)?$/i;
+
+/**
+ * The consumer's pin for `name`, stripped to its range floor (`^6.19.3` → `6.19.3`), or
+ * `null` when there is nothing reproducible to use. `parseRangeMin` also yields partial
+ * cores (`^6` → `"6"`, `~1.2` → `"1.2"`), which would let the rendered version drift
+ * between builds, so only full triples pass — everything else falls back to `default`.
+ */
+function dependencyFloor(deps: Record<string, string>, name: string): string | null {
+  const spec = deps[name];
+  if (spec === undefined) {
+    return null;
+  }
+  const floor = parseRangeMin(spec);
+  return floor !== null && FULL_VERSION_RE.test(floor) ? floor : null;
+}
+
+/**
+ * Resolve a placeholder to its substitution string: config value, then the `fromDependency`
+ * floor, falling back to `default`; `string[]` gets deduped, sorted, and joined.
+ *
+ * `deps` is the consumer's merged dependency map, passed in as data — this stays pure and
+ * never touches the filesystem.
+ */
+function resolvePlaceholder(def: Placeholder, config: StreamctlConfig | undefined, key: string, filePath: string, deps: Record<string, string>): string {
   const raw = readConfigPath(config, def.configPath);
   if (Array.isArray(raw)) {
     const list = [...new Set(raw.filter((item): item is string => typeof item === "string"))].sort();
@@ -73,6 +98,12 @@ function resolvePlaceholder(def: Placeholder, config: StreamctlConfig | undefine
   if (typeof raw === "boolean" || typeof raw === "number") {
     return String(raw);
   }
+  if (def.fromDependency !== undefined) {
+    const floor = dependencyFloor(deps, def.fromDependency);
+    if (floor !== null) {
+      return floor;
+    }
+  }
   return def.default;
 }
 
@@ -86,6 +117,9 @@ const LEFTOVER_TOKEN_RE = /\$\{(?!\{)([^}]*)\}/g;
  *
  * A `${TOKEN}` left unresolved throws `CONFIG_INVALID`, unless declared in
  * `renderDef.passthrough` (e.g. a Dockerfile build `ARG`).
+ *
+ * `deps` feeds placeholder `fromDependency`; omitting it just means no placeholder resolves
+ * that way.
  */
 export function renderFile(
   sourceContent: string,
@@ -93,6 +127,7 @@ export function renderFile(
   config: StreamctlConfig | undefined,
   fragmentSources: Record<string, string>,
   filePath = "(template)",
+  deps: Record<string, string> = {},
 ): string {
   const parts = [sourceContent.replace(/\n+$/, "")];
   for (const fragment of renderDef.fragments ?? []) {
@@ -123,7 +158,7 @@ export function renderFile(
   let output = `${parts.join("\n")}\n`;
 
   for (const [key, def] of Object.entries(renderDef.placeholders ?? {})) {
-    const value = resolvePlaceholder(def, config, key, filePath);
+    const value = resolvePlaceholder(def, config, key, filePath, deps);
     if (def.pattern !== undefined && !new RegExp(def.pattern).test(value)) {
       throw new StreamctlError(
         "CONFIG_INVALID",
