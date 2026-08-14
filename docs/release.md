@@ -51,9 +51,11 @@ Two things worth knowing:
 ## Versioning
 
 What couples the CLI to a payload is the manifest's `schemaVersion` (currently
-`2`), not the package version. A CLI major supports exactly one, exported at the
-`./manifest` subpath. **Bumping it is a CLI major**, and the supporting CLI has
-to ship before any payload adopts it.
+`3`), not the package version. A CLI accepts a set of versions — `{2, 3}` today —
+exported at the `./manifest` subpath as `SUPPORTED_SCHEMA_VERSION` (the current
+one) plus `SUPPORTED_SCHEMA_VERSIONS` (the accepted set). Adding a version is a
+minor when older ones keep parsing, **a major once one is dropped**; either way
+the supporting CLI ships before any payload adopts it.
 
 The config file's `version` pin governs the payload package only. `upgrade` moves
 that pin and leaves the CLI version alone. The CLI and the payload release on

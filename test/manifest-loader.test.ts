@@ -80,19 +80,72 @@ describe("loadPayloadManifest", () => {
 });
 
 describe("schemaVersion contract", () => {
-  // Checked ahead of zod so the user sees both version numbers instead of a literal-mismatch issue.
-  it("names the payload's version and ours when they disagree", async () => {
+  // v2 is still accepted: the CLI supports a set, not a single version.
+  it("accepts a v3 payload", async () => {
     const payload = payloadOf({ "manifest.json": { schemaVersion: 3, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const manifest = await loadPayloadManifest(payload);
+    expect(manifest.schemaVersion).toBe(3);
+  });
+
+  // Checked ahead of zod so the user sees both version numbers instead of a refinement issue.
+  it("names the payload's version and ours when they disagree", async () => {
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 4, presets: ["base"], profiles: [], defaultBase: "base" } });
     const error = await caught(loadPayloadManifest(payload));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
-    expect(error.message).toContain("schemaVersion 3");
-    expect(error.message).toContain("schemaVersion 2");
+    expect(error.message).toContain("schemaVersion 4");
+    expect(error.message).toContain("schemaVersion 2, 3");
+    expect(error.message).toContain("Upgrade the CLI or the payload");
+    expect(error.details).toMatchObject({ found: 4, supported: [2, 3] });
   });
 
   it("surfaces through resolvePresetChain too", async () => {
-    const payload = payloadOf({ "manifest.json": { schemaVersion: 3, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 4, presets: ["base"], profiles: [], defaultBase: "base" } });
     const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
+  });
+});
+
+describe("fromDependency feature gate", () => {
+  /** Single-preset payload whose dockerfile render derives a placeholder from the prisma pin. */
+  function withFromDependency(schemaVersion: number): PayloadHandle {
+    return payloadOf({
+      "manifest.json": { schemaVersion, presets: ["base"], profiles: [], defaultBase: "base" },
+      "base/preset.json": {
+        name: "base",
+        files: [{ path: "Dockerfile", strategy: "full", source: "Dockerfile", render: "dockerfile" }],
+        renders: {
+          dockerfile: {
+            placeholders: {
+              PRISMA_VERSION_DEFAULT: { configPath: "docker.prismaVersion", fromDependency: "prisma", default: "6.19.1" },
+            },
+          },
+        },
+        configKeys: { "docker.prismaVersion": "string" },
+      },
+    });
+  }
+
+  it("lets a v3 payload declare it", async () => {
+    const { files } = await resolvePresetChain(withFromDependency(3), "base", "nuxt-4");
+    expect(files.find(f => f.path === "Dockerfile")?.renderDef?.placeholders?.PRISMA_VERSION_DEFAULT?.fromDependency).toBe("prisma");
+  });
+
+  // zod strictness only protects an OLD CLI; this CLI must refuse the key itself, or a
+  // forgotten schemaVersion bump ships a payload that breaks every 0.2.x repo.
+  it("refuses it under a v2 payload, naming the placeholder and the version it needs", async () => {
+    const error = await caught(resolvePresetChain(withFromDependency(2), "base", "nuxt-4"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain("PRISMA_VERSION_DEFAULT");
+    expect(error.message).toContain("fromDependency");
+    expect(error.message).toContain("requires schemaVersion 3");
+    expect(error.details).toMatchObject({ file: "presets/base/preset.json", render: "dockerfile", placeholder: "PRISMA_VERSION_DEFAULT" });
+  });
+
+  it("leaves a v2 payload without the key alone", async () => {
+    const manifest = await loadPayloadManifest(validPayload());
+    expect(manifest.schemaVersion).toBe(2);
+    const { files } = await resolvePresetChain(validPayload(), "nuxt-app", "nuxt-4");
+    expect(files.length).toBeGreaterThan(0);
   });
 });
 

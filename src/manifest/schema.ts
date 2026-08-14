@@ -13,8 +13,24 @@ import { isStructuredPath } from "../paths";
 const CONFIG_STEM = "streamctl.config";
 const LEGACY_CONFIG_DIR = ".streamctl";
 
-/** A payload declaring any other `schemaVersion` maps to `SCHEMA_UNSUPPORTED`. Manifest and package versions are otherwise independent. */
-export const SUPPORTED_SCHEMA_VERSION = 2;
+/**
+ * The current manifest schema version — what a new payload should declare. Kept under this
+ * name because base-config's `scripts/validate-presets.mjs` imports it from
+ * `@sidebase/streamctl/manifest`. Manifest and package versions are otherwise independent.
+ */
+export const SUPPORTED_SCHEMA_VERSION = 3;
+
+/**
+ * Every version this CLI accepts; anything else maps to `SCHEMA_UNSUPPORTED`. v2 payloads
+ * keep working unchanged, v3 additionally allows placeholder `fromDependency`.
+ */
+export const SUPPORTED_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([2, SUPPORTED_SCHEMA_VERSION]);
+
+/** Sorted rendering of {@link SUPPORTED_SCHEMA_VERSIONS} for error messages. */
+export const SUPPORTED_SCHEMA_VERSION_LIST = [...SUPPORTED_SCHEMA_VERSIONS].sort((a, b) => a - b).join(", ");
+
+/** Lowest `schemaVersion` a payload may declare while using placeholder `fromDependency`. */
+export const FROM_DEPENDENCY_MIN_SCHEMA_VERSION = 3;
 
 /** The CLI checks shape only; semantics stay payload-owned. `"object"` is a presence + `typeof` check with no deep validation. */
 export const CONFIG_KEY_TYPES = ["boolean", "string", "string[]", "object"] as const;
@@ -24,9 +40,14 @@ export type ConfigKeyType = (typeof CONFIG_KEY_TYPES)[number];
  * A `string[]` value is deduped + sorted, then joined per `join` (`space` or
  * `lines`). Substitution is single-pass; any leftover `${…}` fails render.ts's
  * leftover-token check.
+ *
+ * `fromDependency` names an npm package whose pin in the consumer's package.json supplies
+ * the value (stripped to its range floor) when `configPath` yields nothing. Requires payload
+ * `schemaVersion` {@link FROM_DEPENDENCY_MIN_SCHEMA_VERSION}, enforced in `loadPresetManifest`.
  */
 export const placeholderSchema = z.strictObject({
   configPath: z.string().min(1),
+  fromDependency: z.string().min(1).optional(),
   default: z.string(),
   pattern: z.string().min(1).optional(),
   join: z.enum(["space", "lines"]).optional(),
@@ -169,9 +190,12 @@ export const presetManifestSchema = z.strictObject({
   }
 });
 
-/** The top-level payload index (`presets/manifest.json`, v2). */
+/** The top-level payload index (`presets/manifest.json`). */
 export const payloadManifestSchema = z.strictObject({
-  schemaVersion: z.literal(SUPPORTED_SCHEMA_VERSION),
+  schemaVersion: z.number().int().refine(
+    version => SUPPORTED_SCHEMA_VERSIONS.has(version),
+    { message: `must be one of ${SUPPORTED_SCHEMA_VERSION_LIST}` },
+  ),
   presets: z.array(z.string().min(1)),
   profiles: z.array(profileDefSchema),
   defaultBase: z.string().min(1),
