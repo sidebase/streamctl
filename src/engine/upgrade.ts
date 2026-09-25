@@ -51,9 +51,9 @@ export interface RunUpgradeOptions {
    */
   onSignalAbort?: (signal: NodeJS.Signals, statuses: RestoreStatus[]) => void;
   /**
-   * After a post-install failure restores the snapshot, re-run the PM install so
-   * `node_modules` matches the rolled-back `package.json`; the aborted install left
-   * it on the target version.
+   * Re-run the PM install without prompting. Used after the chained sync reconciled
+   * `package.json`, so the lockfile matches it, and after a post-install failure
+   * restores the snapshot, so `node_modules` matches the rolled-back `package.json`.
    */
   reinstall?: (cwd: string) => Promise<void>;
   logger?: Logger;
@@ -523,6 +523,16 @@ export async function runUpgrade(opts: RunUpgradeOptions): Promise<UpgradeResult
       logger: opts.logger,
       pkgDirtyBeforeReconcile: pkgDirtyBefore,
     });
+
+    // The sync reconciled `package.json` after the install above, so the lockfile no
+    // longer matches it. Install again; the user already agreed to the first one.
+    if (sync.lockfileStale) {
+      await runInstaller(async (dir) => {
+        await (opts.reinstall ?? reinstallDependencies)(dir);
+      }, cwd);
+      const { lockfileStale: _stale, ...fresh } = sync;
+      return { fromVersion, toVersion, dependencyBumps, sync: fresh, dryRun: false, rolledBack: false, plan: toPlan() };
+    }
 
     return { fromVersion, toVersion, dependencyBumps, sync, dryRun: false, rolledBack: false, plan: toPlan() };
   } catch (error) {

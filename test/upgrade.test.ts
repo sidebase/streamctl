@@ -738,25 +738,25 @@ describe("runUpgrade", () => {
   });
 });
 
+// A preset whose nuxt-4 profile reconciles `engines.node`, so the chained sync
+// produces a real version change.
+async function withBaseline(): Promise<void> {
+  await writeFile(
+    join(configPkg, "presets", "base", "preset.json"),
+    JSON.stringify({
+      name: "base",
+      files: [
+        { path: ".editorconfig", strategy: "full", source: "base/editorconfig" },
+        { path: "eslint.config.ts", strategy: "scaffold", source: "base/eslint.config.ts" },
+      ],
+      configKeys: { "ci.unitTests": "boolean", "ci.version": "string" },
+      versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0" } },
+    }),
+  );
+}
+
 describe("runUpgrade: version-reconcile dirty warning", () => {
   const git = (...args: string[]): Promise<unknown> => execFileAsync("git", args, { cwd: repo });
-
-  // A preset whose nuxt-4 profile reconciles `engines.node`, so the chained sync
-  // produces a real version change and the warning is reachable.
-  async function withBaseline(): Promise<void> {
-    await writeFile(
-      join(configPkg, "presets", "base", "preset.json"),
-      JSON.stringify({
-        name: "base",
-        files: [
-          { path: ".editorconfig", strategy: "full", source: "base/editorconfig" },
-          { path: "eslint.config.ts", strategy: "scaffold", source: "base/eslint.config.ts" },
-        ],
-        configKeys: { "ci.unitTests": "boolean", "ci.version": "string" },
-        versionProfiles: { "nuxt-4": { "engines.node": ">=24.13.0" } },
-      }),
-    );
-  }
 
   function capture(): { warnings: string[]; logger: { warn: (m: string) => void } } {
     const warnings: string[] = [];
@@ -794,6 +794,37 @@ describe("runUpgrade: version-reconcile dirty warning", () => {
 
     expect(result.sync?.versionChanges.length).toBeGreaterThan(0);
     expect(warnings.some(w => w.includes("uncommitted changes"))).toBe(true);
+  });
+});
+
+describe("runUpgrade: lockfile after the version reconcile", () => {
+  beforeEach(async () => {
+    await withBaseline();
+  });
+
+  it("installs again so the lockfile matches the reconciled package.json", async () => {
+    await writeFile(join(repo, "package-lock.json"), "{}\n");
+    const reinstall = vi.fn(async () => {});
+
+    const result = await runUpgrade(baseOpts({ reinstall }));
+
+    expect(result.sync?.versionChanges.length).toBeGreaterThan(0);
+    expect(reinstall).toHaveBeenCalledExactlyOnceWith(repo);
+    expect(result.sync?.lockfileStale).toBeUndefined();
+  });
+
+  it("rolls back when the second install fails", async () => {
+    await writeFile(join(repo, "package-lock.json"), "{}\n");
+    const before = await hashSnapshot();
+    const reinstall = vi.fn(async () => {
+      throw new Error("install boom");
+    });
+
+    const error = await runUpgrade(baseOpts({ reinstall })).catch((e: unknown) => e);
+
+    expect((error as StreamctlError).code).toBe("INSTALL_FAILED");
+    expect((error as StreamctlError).details).toMatchObject({ rolledBack: true });
+    expect(await hashSnapshot()).toEqual(before);
   });
 });
 
