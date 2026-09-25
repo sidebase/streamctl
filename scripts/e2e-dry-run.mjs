@@ -264,6 +264,12 @@ function runUpgradeLeg() {
     }
     vendorPkg.version = toVersion;
     writeFileSync(vendorPkgPath, `${JSON.stringify(vendorPkg, null, 2)}\n`);
+    // `upgrade` installs again after the reconcile, so the profile may only pin what
+    // installs offline. The fixture's fake devDependency and postinstall would not.
+    const vendorPresetPath = join(vendor, "presets", "app", "preset.json");
+    const vendorPreset = JSON.parse(readFileSync(vendorPresetPath, "utf8"));
+    vendorPreset.versionProfiles.std = { "engines.node": ">=20.9.0" };
+    writeFileSync(vendorPresetPath, `${JSON.stringify(vendorPreset, null, 2)}\n`);
 
     writeFileSync(join(work, "package.json"), `${JSON.stringify({
       name: "app",
@@ -322,12 +328,19 @@ function runUpgradeLeg() {
       return;
     }
     const consumerPkg = JSON.parse(readFileSync(join(work, "package.json"), "utf8"));
-    if (!consumerPkg.devDependencies?.["acme-runtime"]) {
-      console.error("✗ upgrade: chained sync did not reconcile acme-runtime into devDependencies");
+    if (consumerPkg.engines?.node !== ">=20.9.0") {
+      console.error("✗ upgrade: chained sync did not reconcile engines.node");
       process.exitCode = 1;
       return;
     }
-    console.log(`✓ upgrade: pin ${fromVersion} to ${toVersion}, newer payload installed and the chained sync applied`);
+    // (c) the lockfile matches the reconciled package.json.
+    const lock = JSON.parse(readFileSync(join(work, "package-lock.json"), "utf8"));
+    if (lock.packages?.[""]?.engines?.node !== consumerPkg.engines.node) {
+      console.error("✗ upgrade: lockfile is stale after the version reconcile");
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`✓ upgrade: pin ${fromVersion} to ${toVersion}, newer payload installed, the chained sync applied and the lockfile refreshed`);
     passed += 1;
   } finally {
     rmSync(work, { recursive: true, force: true });

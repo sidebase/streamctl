@@ -100,7 +100,7 @@ When the version reconcile edits `package.json` (non-`--dry-run`) and a lockfile
 
 `upgrade` is the only command that moves the pinned version forward. Either it applies in full, or it puts the repo back exactly as it was.
 
-The flow runs in this order. Resolve the target, which is the latest published version or whatever `--to` names. Snapshot the three files a failed run could leave inconsistent: the config file (wherever it resolved), `package.json`, and the detected package manager's lockfile. Bump the pin and the payload devDependency, leaving the CLI's own version alone. Install, so the new bundled presets land on disk. Finally, preflight and apply the first `sync` against the new version.
+The flow runs in this order. Resolve the target, which is the latest published version or whatever `--to` names. Snapshot the three files a failed run could leave inconsistent: the config file (wherever it resolved), `package.json`, and the detected package manager's lockfile. Bump the pin and the payload devDependency, leaving the CLI's own version alone. Install, so the new bundled presets land on disk. Preflight and apply the first `sync` against the new version. Finally, when that sync's version reconcile edited `package.json` and a lockfile exists, install once more so the lockfile matches, without a second prompt.
 
 The preflight comes for free from `sync` being transactional. It composes and validates the whole batch and writes nothing until the batch is clean, so a non-interactive conflict or an invalid new payload throws before any managed file changes.
 
