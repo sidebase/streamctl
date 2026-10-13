@@ -203,7 +203,7 @@ export function renderFile(
   // Values are resolved (and pattern-checked) once, ahead of substitution: they come from
   // the config and the dependency map, never from the output being assembled.
   const values = new Map<string, string>();
-  const omitKeys = new Set<string>();
+  const omitTokens: string[] = [];
   for (const [key, def] of Object.entries(renderDef.placeholders ?? {})) {
     const value = resolvePlaceholder(def, config, key, filePath, deps);
     if (def.pattern !== undefined && !new RegExp(def.pattern).test(value)) {
@@ -213,10 +213,11 @@ export function renderFile(
         { file: filePath, placeholder: key, value },
       );
     }
-    values.set(key, value);
     if (def.omitLineIfEmpty === true && value === "") {
-      omitKeys.add(key);
+      omitTokens.push(`\${${key}}`);
+      continue;
     }
+    values.set(key, value);
   }
 
   const passthrough = new Set(renderDef.passthrough ?? []);
@@ -226,12 +227,7 @@ export function renderFile(
   const substitutePass = (text: string): string => {
     let next = text;
     for (const [key, value] of values) {
-      const token = `\${${key}}`;
-      // Per key, so a token brought in by an earlier key's value in this pass is caught too.
-      if (omitKeys.has(key)) {
-        next = dropTokenLines(next, token);
-      }
-      next = next.replaceAll(token, () => value);
+      next = next.replaceAll(`\${${key}}`, () => value);
     }
     return next;
   };
@@ -250,6 +246,11 @@ export function renderFile(
         { file: filePath, tokens, passes: MAX_SUBSTITUTION_PASSES },
       );
     }
+  }
+
+  // After every other value is in, so a flagged token's line is judged as rendered.
+  for (const token of omitTokens) {
+    output = dropTokenLines(output, token).replaceAll(token, "");
   }
 
   for (const match of output.matchAll(LEFTOVER_TOKEN_RE)) {

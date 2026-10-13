@@ -283,6 +283,13 @@ describe("renderFile: omitLineIfEmpty", () => {
     };
     expect(renderFile("${OUTER}\n", nested, cfg(), {})).toBe("RUN a\nRUN b\n");
   });
+
+  it("does not depend on placeholder declaration order", () => {
+    const prefix = { configPath: "docker.prefix", default: "RUN a\n" };
+    const hook = { configPath: "docker.hook", default: "", omitLineIfEmpty: true };
+    expect(renderFile("${PREFIX}${HOOK}\n", { placeholders: { PREFIX: prefix, HOOK: hook } }, cfg(), {})).toBe("RUN a\n");
+    expect(renderFile("${PREFIX}${HOOK}\n", { placeholders: { HOOK: hook, PREFIX: prefix } }, cfg(), {})).toBe("RUN a\n");
+  });
 });
 
 describe("renderFile: fragments", () => {
