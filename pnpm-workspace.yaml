@@ -1,3 +1,9 @@
 onlyBuiltDependencies:
   - esbuild
   - unrs-resolver
+
+overrides:
+  # GHSA-238p-pmpm-9mq7: micromark-extension-math (via @antfu/eslint-config) caps katex at ^0.16. Drop once it allows >=0.18.2.
+  micromark-extension-math>katex: ^0.18.2
+  # typescript-eslint#12980: no-unused-vars false positives in 8.71.1. Drop once 8.71.2+ clears the release-age cooldown.
+  "@typescript-eslint/eslint-plugin": <8.71.1
