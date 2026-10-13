@@ -49,10 +49,9 @@ export type ConfigKeyType = (typeof CONFIG_KEY_TYPES)[number];
  * the value (stripped to its range floor) when `configPath` yields nothing. Requires payload
  * `schemaVersion` {@link FROM_DEPENDENCY_MIN_SCHEMA_VERSION}, enforced in `loadPresetManifest`.
  *
- * `omitLineIfEmpty` removes a line holding only this token (plus spaces/tabs) when the
- * value is `""`, so an unused hook leaves no blank line behind. A token sharing its line
- * with other text substitutes as usual. Requires `schemaVersion`
- * {@link OMIT_LINE_MIN_SCHEMA_VERSION}.
+ * `omitLineIfEmpty`: when the value is `""`, a line holding only this token (plus
+ * spaces/tabs) after all other placeholders are substituted is removed; any other occurrence
+ * becomes `""`. Requires `schemaVersion` {@link OMIT_LINE_MIN_SCHEMA_VERSION}.
  */
 export const placeholderSchema = z.strictObject({
   configPath: z.string().min(1),

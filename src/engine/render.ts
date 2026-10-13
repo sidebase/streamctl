@@ -248,7 +248,7 @@ export function renderFile(
     }
   }
 
-  // After every other value is in, so a flagged token's line is judged as rendered.
+  // Last, so "alone on its line" is judged on the rendered text.
   for (const token of omitTokens) {
     output = dropTokenLines(output, token).replaceAll(token, "");
   }

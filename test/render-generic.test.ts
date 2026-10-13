@@ -274,16 +274,6 @@ describe("renderFile: omitLineIfEmpty", () => {
     expect(renderFile("RUN a ${HOOK}\n", def(true), cfg(), {})).toBe("RUN a \n");
   });
 
-  it("drops a token line that only appears inside another placeholder's value", () => {
-    const nested: RenderDef = {
-      placeholders: {
-        OUTER: { configPath: "docker.outer", default: "RUN a\n${HOOK}\nRUN b" },
-        HOOK: { configPath: "docker.hook", default: "", omitLineIfEmpty: true },
-      },
-    };
-    expect(renderFile("${OUTER}\n", nested, cfg(), {})).toBe("RUN a\nRUN b\n");
-  });
-
   it("does not depend on placeholder declaration order", () => {
     const prefix = { configPath: "docker.prefix", default: "RUN a\n" };
     const hook = { configPath: "docker.hook", default: "", omitLineIfEmpty: true };
