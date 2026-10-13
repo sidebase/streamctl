@@ -78,11 +78,5 @@
     "typescript": "^6.0.3",
     "unbuild": "^3.6.1",
     "vitest": "^4.1.10"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "unrs-resolver"
-    ]
   }
 }
