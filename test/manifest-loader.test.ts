@@ -87,19 +87,25 @@ describe("schemaVersion contract", () => {
     expect(manifest.schemaVersion).toBe(3);
   });
 
+  it("accepts a v4 payload", async () => {
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 4, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const manifest = await loadPayloadManifest(payload);
+    expect(manifest.schemaVersion).toBe(4);
+  });
+
   // Checked ahead of zod so the user sees both version numbers instead of a refinement issue.
   it("names the payload's version and ours when they disagree", async () => {
-    const payload = payloadOf({ "manifest.json": { schemaVersion: 4, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });
     const error = await caught(loadPayloadManifest(payload));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
-    expect(error.message).toContain("schemaVersion 4");
-    expect(error.message).toContain("schemaVersion 2, 3");
+    expect(error.message).toContain("schemaVersion 5");
+    expect(error.message).toContain("schemaVersion 2, 3, 4");
     expect(error.message).toContain("Upgrade the CLI or the payload");
-    expect(error.details).toMatchObject({ found: 4, supported: [2, 3] });
+    expect(error.details).toMatchObject({ found: 5, supported: [2, 3, 4] });
   });
 
   it("surfaces through resolvePresetChain too", async () => {
-    const payload = payloadOf({ "manifest.json": { schemaVersion: 4, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });
     const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
   });
@@ -146,6 +152,32 @@ describe("fromDependency feature gate", () => {
     expect(manifest.schemaVersion).toBe(2);
     const { files } = await resolvePresetChain(validPayload(), "nuxt-app", "nuxt-4");
     expect(files.length).toBeGreaterThan(0);
+  });
+});
+
+describe("omitLineIfEmpty feature gate", () => {
+  function withOmitLine(schemaVersion: number): PayloadHandle {
+    return payloadOf({
+      "manifest.json": { schemaVersion, presets: ["base"], profiles: [], defaultBase: "base" },
+      "base/preset.json": {
+        name: "base",
+        files: [{ path: "Dockerfile", strategy: "full", source: "Dockerfile", render: "dockerfile" }],
+        renders: { dockerfile: { placeholders: { HOOK: { configPath: "docker.hook", default: "", omitLineIfEmpty: true } } } },
+        configKeys: { "docker.hook": "string" },
+      },
+    });
+  }
+
+  it("lets a v4 payload declare it", async () => {
+    const { files } = await resolvePresetChain(withOmitLine(4), "base", "nuxt-4");
+    expect(files.find(f => f.path === "Dockerfile")?.renderDef?.placeholders?.HOOK?.omitLineIfEmpty).toBe(true);
+  });
+
+  it("refuses it under a v3 payload, naming the placeholder and the version it needs", async () => {
+    const error = await caught(resolvePresetChain(withOmitLine(3), "base", "nuxt-4"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain("\"HOOK\" uses omitLineIfEmpty, which requires schemaVersion 4");
+    expect(error.details).toMatchObject({ file: "presets/base/preset.json", render: "dockerfile", placeholder: "HOOK", found: 3, required: 4 });
   });
 });
 

@@ -145,6 +145,14 @@ function unresolvedTokens(text: string, values: ReadonlyMap<string, string>, pas
   return names.sort().map(name => `\${${name}}`);
 }
 
+/** Removes every line whose only content (besides spaces, tabs and a CR) is `token`. */
+function dropTokenLines(text: string, token: string): string {
+  return text
+    .split("\n")
+    .filter(line => line.replace(/^[ \t]+|[ \t\r]+$/g, "") !== token)
+    .join("\n");
+}
+
 /**
  * Assemble fragments in declared order (`toggle` includes when true, `forEach`
  * repeats per `string[]` item as `${ITEM}`), then substitute `${KEY}` placeholders
@@ -195,6 +203,7 @@ export function renderFile(
   // Values are resolved (and pattern-checked) once, ahead of substitution: they come from
   // the config and the dependency map, never from the output being assembled.
   const values = new Map<string, string>();
+  const omitKeys = new Set<string>();
   for (const [key, def] of Object.entries(renderDef.placeholders ?? {})) {
     const value = resolvePlaceholder(def, config, key, filePath, deps);
     if (def.pattern !== undefined && !new RegExp(def.pattern).test(value)) {
@@ -205,6 +214,9 @@ export function renderFile(
       );
     }
     values.set(key, value);
+    if (def.omitLineIfEmpty === true && value === "") {
+      omitKeys.add(key);
+    }
   }
 
   const passthrough = new Set(renderDef.passthrough ?? []);
@@ -214,7 +226,12 @@ export function renderFile(
   const substitutePass = (text: string): string => {
     let next = text;
     for (const [key, value] of values) {
-      next = next.replaceAll(`\${${key}}`, () => value);
+      const token = `\${${key}}`;
+      // Per key, so a token brought in by an earlier key's value in this pass is caught too.
+      if (omitKeys.has(key)) {
+        next = dropTokenLines(next, token);
+      }
+      next = next.replaceAll(token, () => value);
     }
     return next;
   };

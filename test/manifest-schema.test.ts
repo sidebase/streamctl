@@ -238,6 +238,11 @@ describe("RenderDef", () => {
     expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", fromDependency: 1, default: "" } } }).success).toBe(false);
   });
 
+  it("accepts a boolean omitLineIfEmpty and rejects anything else", () => {
+    expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", omitLineIfEmpty: true } } }).success).toBe(true);
+    expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", omitLineIfEmpty: "yes" } } }).success).toBe(false);
+  });
+
   it("accepts a passthrough token list", () => {
     expect(renderDefSchema.safeParse({ passthrough: ["PRISMA_VERSION", "OTHER"] }).success).toBe(true);
   });
@@ -292,14 +297,14 @@ describe("PayloadManifest schemaVersion contract", () => {
   // The exported constant is base-config's `validate-presets.mjs` contract: it writes this
   // value into new payloads, so it has to be the current one, not just a supported one.
   it("names the current version, which is supported", () => {
-    expect(SUPPORTED_SCHEMA_VERSION).toBe(3);
+    expect(SUPPORTED_SCHEMA_VERSION).toBe(4);
     expect(SUPPORTED_SCHEMA_VERSIONS.has(SUPPORTED_SCHEMA_VERSION)).toBe(true);
   });
 
   // Plain refinement failure here; the loader is what turns it into SCHEMA_UNSUPPORTED.
   it("rejects anything older or newer", () => {
     expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 1 }).success).toBe(false);
-    expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 4 }).success).toBe(false);
+    expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 5 }).success).toBe(false);
     expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 2.5 }).success).toBe(false);
   });
 

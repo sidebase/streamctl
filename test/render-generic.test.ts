@@ -249,6 +249,47 @@ describe("renderFile: nested placeholder tokens", () => {
   });
 });
 
+describe("renderFile: omitLineIfEmpty", () => {
+  const def = (omitLineIfEmpty?: boolean): RenderDef => ({ placeholders: { HOOK: { configPath: "docker.hook", default: "", omitLineIfEmpty } } });
+  const source = "FROM a\n${HOOK}\n\nCOPY b\n";
+
+  it("drops the whole line when the value is empty", () => {
+    expect(renderFile(source, def(true), cfg(), {})).toBe("FROM a\n\nCOPY b\n");
+  });
+
+  it("keeps the line when the value is set", () => {
+    expect(renderFile(source, def(true), cfg({ docker: { hook: "RUN x" } }), {})).toBe("FROM a\nRUN x\n\nCOPY b\n");
+  });
+
+  it("leaves an empty line without the flag, as before", () => {
+    expect(renderFile(source, def(), cfg(), {})).toBe("FROM a\n\n\nCOPY b\n");
+    expect(renderFile(source, def(false), cfg(), {})).toBe("FROM a\n\n\nCOPY b\n");
+  });
+
+  it("drops an indented token line, CRLF included", () => {
+    expect(renderFile("a:\n  ${HOOK}  \nb\n", def(true), cfg(), {})).toBe("a:\nb\n");
+    expect(renderFile("a\r\n\t${HOOK}\r\nb\r\n", def(true), cfg(), {})).toBe("a\r\nb\r\n");
+  });
+
+  it("substitutes a token that shares its line with other text", () => {
+    expect(renderFile("RUN a ${HOOK}\n", def(true), cfg(), {})).toBe("RUN a \n");
+  });
+
+  it("drops the first and the last line too", () => {
+    expect(renderFile("${HOOK}\na\n${HOOK}\n", def(true), cfg(), {})).toBe("a\n");
+  });
+
+  it("drops a token line that only appears inside another placeholder's value", () => {
+    const nested: RenderDef = {
+      placeholders: {
+        OUTER: { configPath: "docker.outer", default: "RUN a\n${HOOK}\nRUN b" },
+        HOOK: { configPath: "docker.hook", default: "", omitLineIfEmpty: true },
+      },
+    };
+    expect(renderFile("${OUTER}\n", nested, cfg(), {})).toBe("RUN a\nRUN b\n");
+  });
+});
+
 describe("renderFile: fragments", () => {
   const frags = { a: "FRAG-A", b: "FRAG-B", c: "FRAG-C" };
   const def: RenderDef = {
