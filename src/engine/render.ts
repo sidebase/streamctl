@@ -145,11 +145,14 @@ function unresolvedTokens(text: string, values: ReadonlyMap<string, string>, pas
   return names.sort().map(name => `\${${name}}`);
 }
 
-/** Removes every line whose only content (besides spaces, tabs and a CR) is `token`. */
-function dropTokenLines(text: string, token: string): string {
+/** Removes every line holding at least one of `tokens` and nothing else but spaces, tabs and a CR. */
+function dropTokenLines(text: string, tokens: readonly string[]): string {
   return text
     .split("\n")
-    .filter(line => line.replace(/^[ \t]+|[ \t\r]+$/g, "") !== token)
+    .filter((line) => {
+      const rest = tokens.reduce((acc, token) => acc.replaceAll(token, ""), line);
+      return rest === line || /[^ \t\r]/.test(rest);
+    })
     .join("\n");
 }
 
@@ -249,9 +252,7 @@ export function renderFile(
   }
 
   // Last, so "alone on its line" is judged on the rendered text.
-  for (const token of omitTokens) {
-    output = dropTokenLines(output, token).replaceAll(token, "");
-  }
+  output = omitTokens.reduce((acc, token) => acc.replaceAll(token, ""), dropTokenLines(output, omitTokens));
 
   for (const match of output.matchAll(LEFTOVER_TOKEN_RE)) {
     const token = match[0];

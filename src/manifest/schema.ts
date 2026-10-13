@@ -49,7 +49,7 @@ export type ConfigKeyType = (typeof CONFIG_KEY_TYPES)[number];
  * the value (stripped to its range floor) when `configPath` yields nothing. Requires payload
  * `schemaVersion` {@link FROM_DEPENDENCY_MIN_SCHEMA_VERSION}, enforced in `loadPresetManifest`.
  *
- * `omitLineIfEmpty`: when the value is `""`, a line holding only this token (plus
+ * `omitLineIfEmpty`: when the value is `""`, a line holding only such tokens (plus
  * spaces/tabs) after all other placeholders are substituted is removed; any other occurrence
  * becomes `""`. Requires `schemaVersion` {@link OMIT_LINE_MIN_SCHEMA_VERSION}.
  */

@@ -274,6 +274,14 @@ describe("renderFile: omitLineIfEmpty", () => {
     expect(renderFile("RUN a ${HOOK}\n", def(true), cfg(), {})).toBe("RUN a \n");
   });
 
+  it("drops a line of several flagged tokens, in any order", () => {
+    const a = { configPath: "docker.a", default: "", omitLineIfEmpty: true };
+    const b = { configPath: "docker.b", default: "", omitLineIfEmpty: true };
+    const source = "before\n${A}${B}${A}\nafter\n";
+    expect(renderFile(source, { placeholders: { A: a, B: b } }, cfg(), {})).toBe("before\nafter\n");
+    expect(renderFile(source, { placeholders: { B: b, A: a } }, cfg(), {})).toBe("before\nafter\n");
+  });
+
   it("does not depend on placeholder declaration order", () => {
     const prefix = { configPath: "docker.prefix", default: "RUN a\n" };
     const hook = { configPath: "docker.hook", default: "", omitLineIfEmpty: true };
