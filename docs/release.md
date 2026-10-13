@@ -51,7 +51,7 @@ Two things worth knowing:
 ## Versioning
 
 What couples the CLI to a payload is the manifest's `schemaVersion` (currently
-`3`), not the package version. A CLI accepts a set of versions — `{2, 3}` today —
+`4`), not the package version. A CLI accepts a set of versions — `{2, 3, 4}` today —
 exported at the `./manifest` subpath as `SUPPORTED_SCHEMA_VERSION` (the current
 one) plus `SUPPORTED_SCHEMA_VERSIONS` (the accepted set). Adding a version is a
 minor when older ones keep parsing, **a major once one is dropped**; either way
@@ -70,22 +70,8 @@ anything that moves that envelope, the exit codes, or `schemaVersion`.
 
 Generated notes only cover commit subjects, so add these by hand.
 
-- **The default config location moved** to `streamctl.config.ts` in the repo
-  root. `init` writes it there.
-- **`.streamctl/config.*` keeps working, permanently.** Not deprecated, no
-  warning, no removal planned. Existing repos need to do nothing.
-- **One break:** `.config/.streamctl/config.ts` used to resolve through c12's
-  `.config/` convention and now raises `NOT_INITIALIZED`. Fix:
-
-  ```sh
-  git mv .config/.streamctl/config.ts streamctl.config.ts
-  ```
-
-  Nothing else under `.config/` was ever read. Realistically nobody is affected:
-  the layout is undocumented, and it only ever worked on trees resolving
-  c12 >= 3.2.0.
-- **New warning:** two extensions at one location (`streamctl.config.js` beside
-  `streamctl.config.ts`) now warn on stderr which one is being read, since c12
-  orders `.js` ahead of `.ts`. Nothing is read differently than before, so a repo
-  that sees it needs no migration.
-- Minor bump: new default, no removals.
+- **Manifest schemaVersion 4.** With placeholder `omitLineIfEmpty: true`, a line
+  holding only the token is removed when the value is `""` instead of left blank.
+- v2 and v3 payloads parse unchanged. Using the key needs `schemaVersion: 4` and
+  this CLI or newer.
+- Minor bump: new schema version, no removals.

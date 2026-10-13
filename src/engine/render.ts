@@ -145,6 +145,17 @@ function unresolvedTokens(text: string, values: ReadonlyMap<string, string>, pas
   return names.sort().map(name => `\${${name}}`);
 }
 
+/** Removes every line holding at least one of `tokens` and nothing else but spaces, tabs and a CR. */
+function dropTokenLines(text: string, tokens: readonly string[]): string {
+  return text
+    .split("\n")
+    .filter((line) => {
+      const rest = tokens.reduce((acc, token) => acc.replaceAll(token, ""), line);
+      return rest === line || /[^ \t\r]/.test(rest);
+    })
+    .join("\n");
+}
+
 /**
  * Assemble fragments in declared order (`toggle` includes when true, `forEach`
  * repeats per `string[]` item as `${ITEM}`), then substitute `${KEY}` placeholders
@@ -195,6 +206,7 @@ export function renderFile(
   // Values are resolved (and pattern-checked) once, ahead of substitution: they come from
   // the config and the dependency map, never from the output being assembled.
   const values = new Map<string, string>();
+  const omitTokens: string[] = [];
   for (const [key, def] of Object.entries(renderDef.placeholders ?? {})) {
     const value = resolvePlaceholder(def, config, key, filePath, deps);
     if (def.pattern !== undefined && !new RegExp(def.pattern).test(value)) {
@@ -203,6 +215,10 @@ export function renderFile(
         `render placeholder "${key}" for "${filePath}" has value ${JSON.stringify(value)}, which violates its pattern /${def.pattern}/.`,
         { file: filePath, placeholder: key, value },
       );
+    }
+    if (def.omitLineIfEmpty === true && value === "") {
+      omitTokens.push(`\${${key}}`);
+      continue;
     }
     values.set(key, value);
   }
@@ -234,6 +250,9 @@ export function renderFile(
       );
     }
   }
+
+  // Last, so "alone on its line" is judged on the rendered text.
+  output = omitTokens.reduce((acc, token) => acc.replaceAll(token, ""), dropTokenLines(output, omitTokens));
 
   for (const match of output.matchAll(LEFTOVER_TOKEN_RE)) {
     const token = match[0];

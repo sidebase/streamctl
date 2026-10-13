@@ -249,6 +249,47 @@ describe("renderFile: nested placeholder tokens", () => {
   });
 });
 
+describe("renderFile: omitLineIfEmpty", () => {
+  const def = (omitLineIfEmpty?: boolean): RenderDef => ({ placeholders: { HOOK: { configPath: "docker.hook", default: "", omitLineIfEmpty } } });
+  const source = "FROM a\n${HOOK}\n\nCOPY b\n";
+
+  it("drops the whole line when the value is empty", () => {
+    expect(renderFile(source, def(true), cfg(), {})).toBe("FROM a\n\nCOPY b\n");
+  });
+
+  it("keeps the line when the value is set", () => {
+    expect(renderFile(source, def(true), cfg({ docker: { hook: "RUN x" } }), {})).toBe("FROM a\nRUN x\n\nCOPY b\n");
+  });
+
+  it("leaves an empty line without the flag, as before", () => {
+    expect(renderFile(source, def(), cfg(), {})).toBe("FROM a\n\n\nCOPY b\n");
+  });
+
+  it("drops an indented token line, CRLF included", () => {
+    expect(renderFile("a:\n  ${HOOK}  \nb\n", def(true), cfg(), {})).toBe("a:\nb\n");
+    expect(renderFile("a\r\n\t${HOOK}\r\nb\r\n", def(true), cfg(), {})).toBe("a\r\nb\r\n");
+  });
+
+  it("substitutes a token that shares its line with other text", () => {
+    expect(renderFile("RUN a ${HOOK}\n", def(true), cfg(), {})).toBe("RUN a \n");
+  });
+
+  it("drops a line of several flagged tokens, in any order", () => {
+    const a = { configPath: "docker.a", default: "", omitLineIfEmpty: true };
+    const b = { configPath: "docker.b", default: "", omitLineIfEmpty: true };
+    const source = "before\n${A}${B}${A}\nafter\n";
+    expect(renderFile(source, { placeholders: { A: a, B: b } }, cfg(), {})).toBe("before\nafter\n");
+    expect(renderFile(source, { placeholders: { B: b, A: a } }, cfg(), {})).toBe("before\nafter\n");
+  });
+
+  it("does not depend on placeholder declaration order", () => {
+    const prefix = { configPath: "docker.prefix", default: "RUN a\n" };
+    const hook = { configPath: "docker.hook", default: "", omitLineIfEmpty: true };
+    expect(renderFile("${PREFIX}${HOOK}\n", { placeholders: { PREFIX: prefix, HOOK: hook } }, cfg(), {})).toBe("RUN a\n");
+    expect(renderFile("${PREFIX}${HOOK}\n", { placeholders: { HOOK: hook, PREFIX: prefix } }, cfg(), {})).toBe("RUN a\n");
+  });
+});
+
 describe("renderFile: fragments", () => {
   const frags = { a: "FRAG-A", b: "FRAG-B", c: "FRAG-C" };
   const def: RenderDef = {

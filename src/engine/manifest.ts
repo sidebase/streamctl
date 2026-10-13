@@ -3,7 +3,7 @@ import type { ManagedFile as EngineManagedFile } from "../config/types";
 import type { ConfigKeyType, ManagedFile as ManifestManagedFile, PayloadManifest, PresetManifest, RenderDef } from "../manifest/schema";
 import type { PayloadHandle } from "../payload/resolve";
 import { StreamctlError } from "../errors";
-import { FROM_DEPENDENCY_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
+import { FROM_DEPENDENCY_MIN_SCHEMA_VERSION, OMIT_LINE_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
 
 const PAYLOAD_MANIFEST = "presets/manifest.json";
 
@@ -102,17 +102,24 @@ export async function loadPresetManifest(payload: PayloadHandle, name: string, m
     }
   }
 
-  // Feature gate. zod strictness only stops `fromDependency` on an OLD CLI; without this
-  // check a payload author who forgets the schemaVersion bump ships a payload this CLI
-  // accepts and every older one rejects with a raw zod wall.
-  if (manifest.schemaVersion < FROM_DEPENDENCY_MIN_SCHEMA_VERSION) {
+  // Feature gates. zod strictness only stops a new key on an OLD CLI; without this check a
+  // payload author who forgets the schemaVersion bump ships a payload this CLI accepts and
+  // every older one rejects with a raw zod wall.
+  const gates = [
+    { feature: "fromDependency", required: FROM_DEPENDENCY_MIN_SCHEMA_VERSION },
+    { feature: "omitLineIfEmpty", required: OMIT_LINE_MIN_SCHEMA_VERSION },
+  ] as const;
+  for (const { feature, required } of gates) {
+    if (manifest.schemaVersion >= required) {
+      continue;
+    }
     for (const [render, def] of Object.entries(preset.renders ?? {})) {
       for (const [key, placeholder] of Object.entries(def.placeholders ?? {})) {
-        if (placeholder.fromDependency !== undefined) {
+        if (placeholder[feature] !== undefined) {
           throw new StreamctlError(
             "CONFIG_INVALID",
-            `${file} renders.${render} placeholder "${key}" uses fromDependency, which requires schemaVersion ${FROM_DEPENDENCY_MIN_SCHEMA_VERSION}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${manifest.schemaVersion}.`,
-            { file, preset: name, render, placeholder: key, found: manifest.schemaVersion, required: FROM_DEPENDENCY_MIN_SCHEMA_VERSION },
+            `${file} renders.${render} placeholder "${key}" uses ${feature}, which requires schemaVersion ${required}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${manifest.schemaVersion}.`,
+            { file, preset: name, render, placeholder: key, found: manifest.schemaVersion, required },
           );
         }
       }
