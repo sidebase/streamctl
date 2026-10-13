@@ -70,9 +70,8 @@ anything that moves that envelope, the exit codes, or `schemaVersion`.
 
 Generated notes only cover commit subjects, so add these by hand.
 
-- **Manifest schemaVersion 4.** A placeholder can set `omitLineIfEmpty: true`. When
-  its value is `""`, a line holding only the token is removed instead of rendering
-  as an empty line, so an unused hook leaves no trace in the output.
-- Versions 2 and 3 still parse, so existing payloads need nothing. A payload that
-  uses the key must declare `schemaVersion: 4` and needs this CLI or newer.
+- **Manifest schemaVersion 4.** With placeholder `omitLineIfEmpty: true`, a line
+  holding only the token is removed when the value is `""` instead of left blank.
+- v2 and v3 payloads parse unchanged. Using the key needs `schemaVersion: 4` and
+  this CLI or newer.
 - Minor bump: new schema version, no removals.
