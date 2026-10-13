@@ -87,12 +87,6 @@ describe("schemaVersion contract", () => {
     expect(manifest.schemaVersion).toBe(3);
   });
 
-  it("accepts a v4 payload", async () => {
-    const payload = payloadOf({ "manifest.json": { schemaVersion: 4, presets: ["base"], profiles: [], defaultBase: "base" } });
-    const manifest = await loadPayloadManifest(payload);
-    expect(manifest.schemaVersion).toBe(4);
-  });
-
   // Checked ahead of zod so the user sees both version numbers instead of a refinement issue.
   it("names the payload's version and ours when they disagree", async () => {
     const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });

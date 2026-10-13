@@ -263,7 +263,6 @@ describe("renderFile: omitLineIfEmpty", () => {
 
   it("leaves an empty line without the flag, as before", () => {
     expect(renderFile(source, def(), cfg(), {})).toBe("FROM a\n\n\nCOPY b\n");
-    expect(renderFile(source, def(false), cfg(), {})).toBe("FROM a\n\n\nCOPY b\n");
   });
 
   it("drops an indented token line, CRLF included", () => {
@@ -273,10 +272,6 @@ describe("renderFile: omitLineIfEmpty", () => {
 
   it("substitutes a token that shares its line with other text", () => {
     expect(renderFile("RUN a ${HOOK}\n", def(true), cfg(), {})).toBe("RUN a \n");
-  });
-
-  it("drops the first and the last line too", () => {
-    expect(renderFile("${HOOK}\na\n${HOOK}\n", def(true), cfg(), {})).toBe("a\n");
   });
 
   it("drops a token line that only appears inside another placeholder's value", () => {

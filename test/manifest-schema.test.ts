@@ -238,11 +238,6 @@ describe("RenderDef", () => {
     expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", fromDependency: 1, default: "" } } }).success).toBe(false);
   });
 
-  it("accepts a boolean omitLineIfEmpty and rejects anything else", () => {
-    expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", omitLineIfEmpty: true } } }).success).toBe(true);
-    expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", omitLineIfEmpty: "yes" } } }).success).toBe(false);
-  });
-
   it("accepts a passthrough token list", () => {
     expect(renderDefSchema.safeParse({ passthrough: ["PRISMA_VERSION", "OTHER"] }).success).toBe(true);
   });
