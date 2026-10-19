@@ -1,4 +1,5 @@
 import type { StreamctlConfig } from "../config/types";
+import type { DirectiveErrorDetails } from "../directives";
 import { StreamctlError } from "../errors";
 import { readConfigPath } from "./render";
 
@@ -21,6 +22,6 @@ export function evaluateCondition(config: StreamctlConfig | undefined, path: str
   throw new StreamctlError(
     "CONFIG_INVALID",
     `${filePath}: condition "${path}" has a ${found} value in the config, which cannot be used as a condition (boolean, string or string[] expected).`,
-    { file: filePath, condition: path, reason: "unevaluable-value", found },
+    { file: filePath, condition: path, reason: "unevaluable-value", found } satisfies DirectiveErrorDetails,
   );
 }

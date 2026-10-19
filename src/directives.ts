@@ -27,7 +27,8 @@ export type DirectiveReason
 
 export interface DirectiveErrorDetails {
   file: string;
-  line: number;
+  /** Absent for `unevaluable-value`, which is raised at render time. */
+  line?: number;
   reason: DirectiveReason;
   directive?: string;
   condition?: string;
