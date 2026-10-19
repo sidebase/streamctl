@@ -45,7 +45,8 @@ async function render(path: string, config: StreamctlConfig): Promise<string> {
   if (result.status !== "composed") {
     throw new Error(`expected composed, got ${result.status}`);
   }
-  return result.targetContent;
+  // Windows checkouts turn fixture line endings into CRLF.
+  return result.targetContent.replaceAll("\r\n", "\n");
 }
 
 describe("directives payload fixture", () => {
