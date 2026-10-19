@@ -273,6 +273,14 @@ describe("renderFile: indent-aware substitution", () => {
     expect(renderFile("  ${A} ${B}\n", def, cfg(), {})).toBe("  a1\n  a2 b1\n  b2\n");
   });
 
+  it("indents nested multiline tokens independent of placeholder order", () => {
+    const a = { configPath: "ci.a", default: "x\n  ${B}" };
+    const b = { configPath: "ci.b", default: "b1\nb2" };
+    const expected = "  x\n    b1\n    b2\n";
+    expect(renderFile("  ${A}\n", { placeholders: { A: a, B: b } }, cfg(), {})).toBe(expected);
+    expect(renderFile("  ${A}\n", { placeholders: { B: b, A: a } }, cfg(), {})).toBe(expected);
+  });
+
   it("lands $& and $1 verbatim", () => {
     expect(renderFile("  ${SCRIPT}\n", script("x $& y\n$1"), cfg(), {})).toBe("  x $& y\n  $1\n");
   });

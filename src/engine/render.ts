@@ -225,18 +225,27 @@ export function renderFile(
 
   const passthrough = new Set(renderDef.passthrough ?? []);
 
-  // Per line, so continuation lines of a multiline value get the token line's leading
-  // whitespace (empty ones stay empty). Callback form: a plain replacement string would
-  // honor `$&`/`$1` patterns in the value; config values are data and must land verbatim.
-  const substitutePass = (text: string): string => text.split("\n").map((line) => {
-    const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
-    let next = line;
+  // Per key, then per line, so continuation lines of a multiline value get the leading
+  // whitespace of the line holding the token (not the token's column); empty ones stay
+  // empty. Re-splitting per key keeps nested tokens independent of declaration order.
+  // Callback form: a plain replacement string would honor `$&`/`$1` patterns in the
+  // value; config values are data and must land verbatim.
+  const substitutePass = (text: string): string => {
+    let next = text;
     for (const [key, value] of values) {
-      const indented = indent === "" ? value : value.split("\n").map((part, index) => index === 0 || part === "" ? part : indent + part).join("\n");
-      next = next.replaceAll(`\${${key}}`, () => indented);
+      const token = `\${${key}}`;
+      if (!next.includes(token)) {
+        continue;
+      }
+      const parts = value.split("\n");
+      next = next.split("\n").map((line) => {
+        const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
+        const indented = parts.map((part, index) => index === 0 || part === "" ? part : indent + part).join("\n");
+        return line.replaceAll(token, () => indented);
+      }).join("\n");
     }
     return next;
-  }).join("\n");
+  };
 
   for (let pass = 1; ; pass++) {
     const next = substitutePass(output);
