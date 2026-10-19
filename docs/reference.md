@@ -133,6 +133,113 @@ Per-file `state` in `streamctl status` is one of:
 
 The `--json` `data` is `{ files: { path, state, strategy }[], payload: { package, pinned, installed, latest? }, profile, cliVersion, lockfileStale }`.
 
+## Template directives
+
+Payload templates and fragments can mark runs of whole lines as conditional. Requires manifest `schemaVersion: 5` (`DIRECTIVES_MIN_SCHEMA_VERSION`).
+
+### Grammar
+
+One directive per line: optional indent, the file's comment token, optional spaces, `streamctl:`, the verb, one or more spaces, the condition, and ` -->` for HTML-comment files. Nothing else may follow.
+
+```
+<token> streamctl:if <condition>
+<token> streamctl:else <condition>   (optional, at most one)
+<token> streamctl:end <condition>
+```
+
+- The condition is `[!]segment(.segment)*`, segments `[A-Za-z0-9_-]+`. `!` negates.
+- `else` and `end` repeat the `if` condition byte for byte, `!` included.
+- Blocks do not nest. Empty bodies and empty `else` branches are allowed.
+- A trailing `\r` is tolerated; every other line is kept byte for byte.
+- Only a line that starts (after whitespace) with the comment token and `streamctl:` is a directive. `run: echo "# streamctl:if x"` is content.
+
+### Where directives work
+
+| Comment token | Files |
+| ------------- | ----- |
+| `#` | YAML, Dockerfile, ignore files, `.editorconfig`, ini, sh, any unknown extension |
+| `//` | js, mjs, cjs, ts, mts, cts |
+| `<!-- ... -->` | md, markdown, html, htm, vue |
+
+`full`, `scaffold` and `block` templates accept directives, with or without a `render` definition, as do fragment sources. `.json`, `.jsonc` and `.json5` targets reject them (`structured-json`), and so do `merge` templates (`merge-strategy`). The token is chosen by the target path for templates and by the source path for fragments.
+
+### Pipeline order
+
+1. When the preset chain resolves, every template and fragment source is read and scanned, including files switched off by `files: off` or `enabledBy`. Syntax, placement, schema-version and condition-declaration errors fail every command here.
+2. Per active file: the directive pass runs on the template body, then on each fragment body.
+3. Fragments are appended (`toggle`, `forEach`).
+4. Placeholders are substituted. A `${TOKEN}` inside a dropped block is gone and needs no value.
+5. Structured output (`.json*`, `.ya?ml`) is parse-checked.
+
+The directive pass removes every directive line, the `if` branch of a false block and the `else` branch of a true one.
+
+### Condition truthiness
+
+The condition must be declared in the merged `configKeys`, either exactly or under an `object` key (`ci` declared as `object` allows `ci.lint`). Naming the `object` key itself is an error.
+
+| Config value | Result |
+| ------------ | ------ |
+| `true` | true |
+| non-empty string | true |
+| array with at least one element | true |
+| absent, `false`, `""`, `[]` | false |
+| number, object, `null` | `CONFIG_INVALID` (`unevaluable-value`) |
+
+### Placement rules
+
+- `if`, `else` and `end` use identical leading whitespace.
+- In `.yaml`/`.yml` targets every non-blank line of both branches starts with the directives' indentation. YAML itself allows comments at any indentation; this is a deliberate lint.
+- With `else`, the template must stay valid with both branches present. Alternative list items, Dockerfile instructions, Markdown paragraphs or TS statements are fine. Two versions of the same YAML mapping key are not (the YAML language server flags the duplicate); use a placeholder for key-level variants.
+
+### Reserved namespace
+
+`streamctl:` right after a comment token is reserved. Prose like `# streamctl: the CLI` is an `unknown-directive` error. The verbs `each`, `insert` and `raw` are reserved for a future version and fail the same way with a hint.
+
+### Errors
+
+Every directive error is `CONFIG_INVALID` (exit `1`). The message reads `<presets/...>:<line>: <sentence>`; `details` carries `file`, `line`, `reason` and, where relevant, `directive`, `condition`, `expected`, `openedAt`, `found`.
+
+| `reason` | Meaning |
+| -------- | ------- |
+| `unknown-directive` | Verb is not `if`, `else` or `end` (reserved verbs get a hint) |
+| `missing-condition` | Directive without a condition |
+| `malformed-condition` | Condition fails the grammar, extra text on the line, or missing `-->` |
+| `unopened-end` | `end` with no open block |
+| `unopened-else` | `else` with no open block |
+| `duplicate-else` | Second `else` in one block |
+| `unclosed-if` | `if` without `end` before the end of the text |
+| `end-mismatch` | `end` names a different condition than the open `if` |
+| `else-mismatch` | `else` names a different condition than the open `if` |
+| `nested-if` | `if` while another block is open |
+| `indent-mismatch` | `else` or `end` indented differently from its `if` |
+| `body-outdented` | YAML only: a body line indented less than the directives |
+| `structured-json` | Directive in a `.json`/`.jsonc`/`.json5` target |
+| `merge-strategy` | Directive in a `merge` template |
+| `schema-version` | Directive present but the manifest declares `schemaVersion` below 5 |
+| `undeclared-condition` | Condition not declared in any preset's `configKeys` |
+| `object-condition` | Condition names an `object` key exactly |
+| `unevaluable-value` | At render: the consumer config holds a number, object or `null` at the condition |
+
+Payload tooling can list a template's blocks with `scanDirectives(text, path)` from `@sidebase/streamctl/manifest`.
+
+### Caveats
+
+- `scaffold` files evaluate directives once, when they are written. Later config changes do not touch them.
+- Dockerfile parser directives (`# syntax=`, `# escape=`) must stay the first lines. Docker stops looking for them after the first ordinary comment, so put streamctl directives after them. Comment lines inside a `RUN \` continuation are removed by Docker, so a block inside a continuation works as long as the continuation does not end on a removed line.
+- Inside a YAML block scalar (`run: |`) a `# streamctl:if` line is string content to YAML but still a directive to streamctl. It is removed before YAML parses the output.
+- Flipping a knob that changes a block in a `full` file shows up as drift, like any other render change (see [Known caveats](#known-caveats)).
+
+### Indent-aware substitution
+
+A multiline placeholder value takes the indentation of the line holding its token: continuation lines get that line's leading whitespace, empty continuation lines stay empty. Tokens at column 0 render as before. This is not gated by `schemaVersion`.
+
+```yaml
+run: |
+  ${SCRIPT}
+```
+
+With `SCRIPT` = `"pnpm lint\npnpm test"` this renders both commands at the `run` body's indentation.
+
 ## Known caveats
 
 **Type-aware lint needs generated types first.** With `LINT_TYPEAWARE=true`, the Prisma client and the Nuxt types have to exist before `lint` (and `typecheck`) runs, so run `prisma generate` and `nuxi prepare` first. The managed `ci.yaml` already orders `prisma generate` ahead of `lint`, and `postinstall: "nuxt prepare"` covers local installs. There is no preflight check for this.

@@ -192,6 +192,28 @@ When `sync` cannot proceed on a file, the conflict carries a `kind`, so the repo
 
 Structured files (`.json*`, `.ya?ml`) get extra safety: composed output is parse-validated before writing, and the `block` strategy is forbidden on them. Details in [structured-file safety](docs/reference.md#structured-file-safety).
 
+### Template directives
+
+A payload template can mark whole lines as conditional on a config knob. Directive lines are comments in the file's own syntax, so the template stays valid YAML, Dockerfile, TS or Markdown:
+
+```yaml
+steps:
+  - run: pnpm typecheck
+  # streamctl:if ci.lint
+  - run: pnpm lint
+  # streamctl:else ci.lint
+  - run: echo "lint disabled"
+  # streamctl:end ci.lint
+```
+
+- `if`, optional `else`, and `end` all name the same condition; `!` negates it. No nesting.
+- A condition is a config path declared in some preset's `configKeys`; `true`, a non-empty string or a non-empty array is true.
+- Directive lines are always removed; the inactive branch is removed with them.
+- `if`/`else`/`end` share one indentation; JSON files and `merge` files reject directives.
+- Needs manifest `schemaVersion: 5`. Every mistake fails with `CONFIG_INVALID`, naming file and line.
+
+Full rules in [template directives](docs/reference.md#template-directives).
+
 ## Configuration
 
 `init` scaffolds `streamctl.config.ts` at the repo root, from the payload's own template. The payload exports a typed define function (via its `./config` subpath), so the knobs get full editor inference:

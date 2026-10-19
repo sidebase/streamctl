@@ -70,8 +70,22 @@ anything that moves that envelope, the exit codes, or `schemaVersion`.
 
 Generated notes only cover commit subjects, so add these by hand.
 
-- **Manifest schemaVersion 4.** With placeholder `omitLineIfEmpty: true`, a line
-  holding only the token is removed when the value is `""` instead of left blank.
-- v2 and v3 payloads parse unchanged. Using the key needs `schemaVersion: 4` and
-  this CLI or newer.
+- **Manifest schemaVersion 5: template directives.** Templates and fragments can
+  wrap lines in `streamctl:if <cond>` / `streamctl:else <cond>` /
+  `streamctl:end <cond>` comments; inactive branches and all directive lines are
+  removed at render. See [template directives](reference.md#template-directives).
+- `scanDirectives`, `commentSyntaxFor` and `DIRECTIVES_MIN_SCHEMA_VERSION` are
+  exported from `@sidebase/streamctl/manifest`; `SUPPORTED_SCHEMA_VERSION` is now 5.
+- Chain resolution now reads and scans every template and fragment source,
+  including files that are `off` or disabled by `enabledBy`. A payload missing a
+  template source therefore fails every command up front, not only when the file
+  is active.
+- `init` loads the `streamctl.config.ts` it just scaffolded and runs the first sync
+  with it, so payload wrapper defaults apply right away. If the file cannot be
+  loaded, `init` prints a one-line warning and falls back to package, base,
+  version and profile only, as before.
+- Indent-aware substitution: continuation lines of a multiline placeholder value
+  get the token line's indentation. Not gated; tokens at column 0 render as before.
+- v2 to v4 payloads parse unchanged; directives need `schemaVersion: 5` and this
+  CLI or newer.
 - Minor bump: new schema version, no removals.
