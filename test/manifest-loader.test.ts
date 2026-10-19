@@ -87,19 +87,25 @@ describe("schemaVersion contract", () => {
     expect(manifest.schemaVersion).toBe(3);
   });
 
+  it("accepts a v5 payload", async () => {
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const manifest = await loadPayloadManifest(payload);
+    expect(manifest.schemaVersion).toBe(5);
+  });
+
   // Checked ahead of zod so the user sees both version numbers instead of a refinement issue.
   it("names the payload's version and ours when they disagree", async () => {
-    const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 6, presets: ["base"], profiles: [], defaultBase: "base" } });
     const error = await caught(loadPayloadManifest(payload));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
-    expect(error.message).toContain("schemaVersion 5");
-    expect(error.message).toContain("schemaVersion 2, 3, 4");
+    expect(error.message).toContain("schemaVersion 6");
+    expect(error.message).toContain("schemaVersion 2, 3, 4, 5");
     expect(error.message).toContain("Upgrade the CLI or the payload");
-    expect(error.details).toMatchObject({ found: 5, supported: [2, 3, 4] });
+    expect(error.details).toMatchObject({ found: 6, supported: [2, 3, 4, 5] });
   });
 
   it("surfaces through resolvePresetChain too", async () => {
-    const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 6, presets: ["base"], profiles: [], defaultBase: "base" } });
     const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
   });
