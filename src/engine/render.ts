@@ -208,11 +208,24 @@ export function renderFile(
 
   let output = `${parts.join("\n")}\n`;
 
-  // Values are resolved (and pattern-checked) once, ahead of substitution: they come from
-  // the config and the dependency map, never from the output being assembled.
+  // Values come from the config and the dependency map, never from the output being
+  // assembled. Only placeholders reachable from the assembled text (directly or through
+  // another value) are resolved and pattern-checked, so a token in a dropped directive
+  // block needs no valid value.
+  const defs = renderDef.placeholders ?? {};
   const values = new Map<string, string>();
   const omitTokens: string[] = [];
-  for (const [key, def] of Object.entries(renderDef.placeholders ?? {})) {
+  const pending = [...output.matchAll(LEFTOVER_TOKEN_RE)].map(match => match[1] ?? "");
+  const seen = new Set<string>();
+  for (let key = pending.shift(); key !== undefined; key = pending.shift()) {
+    if (seen.has(key) || !Object.hasOwn(defs, key)) {
+      continue;
+    }
+    const def = defs[key];
+    if (def === undefined) {
+      continue;
+    }
+    seen.add(key);
     const value = resolvePlaceholder(def, config, key, filePath, deps);
     if (def.pattern !== undefined && !new RegExp(def.pattern).test(value)) {
       throw new StreamctlError(
@@ -226,6 +239,7 @@ export function renderFile(
       continue;
     }
     values.set(key, value);
+    pending.push(...[...value.matchAll(LEFTOVER_TOKEN_RE)].map(match => match[1] ?? ""));
   }
 
   const passthrough = new Set(renderDef.passthrough ?? []);

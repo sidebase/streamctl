@@ -108,6 +108,13 @@ describe("compose: directive pass", () => {
     expect(content(await compose(file, payload, null, cfg()))).toBe("jobs:\n  lint: true\n");
   });
 
+  it("skips the pattern check of a placeholder used only in a dropped block", async () => {
+    const renderDef = { placeholders: { DEPLOY: { configPath: "ci.target", default: "", pattern: "^[a-z]+$" } } };
+    const file: ManagedFile = { path: ".github/workflows/ci.yaml", strategy: "full", source: "base/ci.yaml", renderDef };
+    expect(content(await compose(file, payload, null, cfg()))).toBe("jobs:\n  lint: true\n");
+    await expect(compose(file, payload, null, cfg({ ci: { deploy: true } }))).rejects.toThrow(/violates its pattern/);
+  });
+
   it("still fails on a token inside a kept block without a placeholder", async () => {
     const file: ManagedFile = { path: ".github/workflows/ci.yaml", strategy: "full", source: "base/ci.yaml", renderDef: {} };
     await expect(compose(file, payload, null, cfg({ ci: { deploy: true } }))).rejects.toThrow(/unresolved render token/);

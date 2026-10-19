@@ -168,7 +168,7 @@ One directive per line: optional indent, the file's comment token, optional spac
 1. When the preset chain resolves, every template and fragment source is read and scanned, including files switched off by `files: off` or `enabledBy`. Syntax, placement, schema-version and condition-declaration errors fail every command here.
 2. Per active file: the directive pass runs on the template body, then on each fragment body.
 3. Fragments are appended (`toggle`, `forEach`).
-4. Placeholders are substituted. A `${TOKEN}` inside a dropped block is gone and needs no value.
+4. Placeholders are substituted. A `${TOKEN}` inside a dropped block is gone and needs no value: placeholders are only resolved and pattern-checked when their token is reachable from the rendered text.
 5. Structured output (`.json*`, `.ya?ml`) is parse-checked.
 
 The directive pass removes every directive line, the `if` branch of a false block and the `else` branch of a true one.

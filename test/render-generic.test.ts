@@ -305,6 +305,23 @@ describe("renderFile: indent-aware substitution", () => {
   });
 });
 
+describe("renderFile: unreachable placeholders", () => {
+  const def: RenderDef = { placeholders: { TARGET: { configPath: "ci.target", default: "", pattern: "^[a-z]+$" } } };
+
+  it("skips resolving and pattern-checking a placeholder whose token is absent", () => {
+    expect(renderFile("deploy: off\n", def, cfg(), {})).toBe("deploy: off\n");
+  });
+
+  it("still checks it once the token is present", () => {
+    expect(() => renderFile("target: ${TARGET}\n", def, cfg(), {})).toThrow(/violates its pattern/);
+  });
+
+  it("checks a placeholder reachable only through another value", () => {
+    const nested: RenderDef = { placeholders: { ...def.placeholders, CMD: { configPath: "ci.cmd", default: "deploy ${TARGET}" } } };
+    expect(() => renderFile("run: ${CMD}\n", nested, cfg(), {})).toThrow(/TARGET/);
+  });
+});
+
 describe("renderFile: omitLineIfEmpty", () => {
   const def = (omitLineIfEmpty?: boolean): RenderDef => ({ placeholders: { HOOK: { configPath: "docker.hook", default: "", omitLineIfEmpty } } });
   const source = "FROM a\n${HOOK}\n\nCOPY b\n";
