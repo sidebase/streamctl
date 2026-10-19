@@ -9,6 +9,10 @@ function payloadOf(files: Record<string, unknown>): PayloadHandle {
     version: "2.0.0",
     async read(source) {
       if (!(source in files)) {
+        // Templates are scanned for directives at chain time; most cases don't need content.
+        if (source !== "manifest.json" && !source.endsWith("/preset.json")) {
+          return "";
+        }
         throw new Error(`missing fixture source: ${source}`);
       }
       const value = files[source];
@@ -426,5 +430,104 @@ describe("manifest is required", () => {
     const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("PAYLOAD_INVALID");
     expect(error.message).toContain("has no presets/manifest.json");
+  });
+});
+
+describe("chain-time directive validation", () => {
+  const block = "# streamctl:if ci.deploy\ndeploy: true\n# streamctl:end ci.deploy\n";
+
+  function directivePayload(over: { schemaVersion?: number; files?: unknown[]; configKeys?: Record<string, string>; sources?: Record<string, string>; renders?: Record<string, unknown> } = {}): PayloadHandle {
+    return payloadOf({
+      "manifest.json": { schemaVersion: over.schemaVersion ?? 5, presets: ["base"], profiles: [], defaultBase: "base" },
+      "base/preset.json": {
+        name: "base",
+        files: over.files ?? [{ path: ".github/workflows/ci.yaml", strategy: "full", source: "base/ci.yaml" }],
+        configKeys: over.configKeys ?? { "ci.deploy": "boolean" },
+        ...(over.renders === undefined ? {} : { renders: over.renders }),
+      },
+      "base/ci.yaml": block,
+      ...over.sources,
+    });
+  }
+
+  it("accepts declared conditions on a v5 payload", async () => {
+    const { files } = await resolvePresetChain(directivePayload(), "base", "nuxt-4");
+    expect(files.map(f => f.path)).toEqual([".github/workflows/ci.yaml"]);
+  });
+
+  it("reads each source once", async () => {
+    const payload = directivePayload({
+      files: [
+        { path: "a.yaml", strategy: "full", source: "base/ci.yaml", render: "r" },
+        { path: "b.yaml", strategy: "full", source: "base/ci.yaml", render: "r" },
+      ],
+      renders: { r: { fragments: [{ toggle: "ci.deploy", source: "base/frag.yml" }] } },
+      sources: { "base/frag.yml": "" },
+    });
+    const reads: string[] = [];
+    const counting: PayloadHandle = { ...payload, read: async (source) => {
+      reads.push(source);
+      return payload.read(source);
+    } };
+    await resolvePresetChain(counting, "base", "nuxt-4");
+    expect(reads.filter(source => source === "base/ci.yaml")).toHaveLength(1);
+    expect(reads.filter(source => source === "base/frag.yml")).toHaveLength(1);
+  });
+
+  it("rejects directives on a schema-4 payload", async () => {
+    const error = await caught(resolvePresetChain(directivePayload({ schemaVersion: 4 }), "base", "nuxt-4"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain("requires schemaVersion 5, but presets/manifest.json declares schemaVersion 4");
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "schema-version" });
+  });
+
+  it("rejects an undeclared condition, naming file and line", async () => {
+    const error = await caught(resolvePresetChain(directivePayload({ configKeys: { "ci.lint": "boolean" } }), "base", "nuxt-4"));
+    expect(error.message).toContain("template \"presets/base/ci.yaml\" line 1 references config path \"ci.deploy\", which no preset declares in configKeys");
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "undeclared-condition", path: "ci.deploy" });
+  });
+
+  it("rejects directives in a merge-strategy template", async () => {
+    const payload = directivePayload({
+      files: [{ path: ".vscode/settings.txt", strategy: "merge", source: "base/settings" }],
+      sources: { "base/settings": block },
+    });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.details).toMatchObject({ file: "presets/base/settings", line: 1, reason: "merge-strategy" });
+  });
+
+  it("rejects a condition naming an object key exactly", async () => {
+    const payload = directivePayload({ sources: { "base/ci.yaml": "# streamctl:if ci\n# streamctl:end ci\n" }, configKeys: { ci: "object" } });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "object-condition", condition: "ci" });
+  });
+
+  it("accepts a condition descending into an object key", async () => {
+    await expect(resolvePresetChain(directivePayload({ configKeys: { ci: "object" } }), "base", "nuxt-4")).resolves.toBeDefined();
+  });
+
+  it("relocates parser errors to the payload-relative source", async () => {
+    const payload = directivePayload({ sources: { "base/ci.yaml": "x\n# streamctl:if ci.deploy\n" } });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.message).toMatch(/^presets\/base\/ci\.yaml:2: /);
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 2, reason: "unclosed-if", openedAt: 2 });
+  });
+
+  it("scans fragments with the fragment source as path", async () => {
+    const payload = directivePayload({
+      files: [{ path: "ci.yaml", strategy: "full", source: "base/ci.yaml", render: "r" }],
+      renders: { r: { fragments: [{ toggle: "ci.deploy", source: "base/frag.yml" }] } },
+      sources: { "base/frag.yml": "# streamctl:if ci.missing\n# streamctl:end ci.missing\n" },
+    });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.message).toContain("fragment \"presets/base/frag.yml\" line 1");
+  });
+
+  it("scans files that are switched off by enabledBy", async () => {
+    const payload = directivePayload({
+      files: [{ path: "ci.yaml", strategy: "full", source: "base/ci.yaml", enabledBy: "ci.deploy" }],
+      sources: { "base/ci.yaml": "# streamctl:end ci.deploy\n" },
+    });
+    expect((await caught(resolvePresetChain(payload, "base", "nuxt-4"))).details).toMatchObject({ reason: "unopened-end" });
   });
 });

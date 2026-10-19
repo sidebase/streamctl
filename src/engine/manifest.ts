@@ -1,9 +1,11 @@
 import type { ZodError } from "zod";
 import type { ManagedFile as EngineManagedFile } from "../config/types";
+import type { DirectiveBlock } from "../directives";
 import type { ConfigKeyType, ManagedFile as ManifestManagedFile, PayloadManifest, PresetManifest, RenderDef } from "../manifest/schema";
 import type { PayloadHandle } from "../payload/resolve";
+import { scanDirectives } from "../directives";
 import { StreamctlError } from "../errors";
-import { FROM_DEPENDENCY_MIN_SCHEMA_VERSION, OMIT_LINE_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
+import { DIRECTIVES_MIN_SCHEMA_VERSION, FROM_DEPENDENCY_MIN_SCHEMA_VERSION, OMIT_LINE_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
 
 const PAYLOAD_MANIFEST = "presets/manifest.json";
 
@@ -145,6 +147,88 @@ function toEngineFile(file: ManifestManagedFile): EngineManagedFile {
 interface ConfigPathRef {
   where: string;
   path: string;
+  /** Extra error details, e.g. the directive location. */
+  details?: Record<string, unknown>;
+}
+
+interface DirectiveScanTarget {
+  source: string;
+  /** Drives comment syntax, the YAML body rule and JSON rejection. */
+  scanPath: string;
+  kind: "template" | "fragment";
+  strategy?: EngineManagedFile["strategy"];
+}
+
+/** Re-point a parser error from the scan path to the payload-relative source file. */
+function relocateDirectiveError(error: unknown, scanPath: string, file: string): unknown {
+  if (!(error instanceof StreamctlError) || !isRecord(error.details) || typeof error.details.line !== "number") {
+    return error;
+  }
+  const prefix = `${scanPath}:${error.details.line}: `;
+  const sentence = error.message.startsWith(prefix) ? error.message.slice(prefix.length) : error.message;
+  return new StreamctlError(error.code, `${file}:${error.details.line}: ${sentence}`, { ...error.details, file });
+}
+
+/**
+ * Scan every template and fragment of the resolved chain, including files later
+ * switched off, so a directive mistake fails every command up front. Pushes each
+ * condition into `configPathRefs` for the shared declaration check.
+ */
+async function validateDirectives(
+  payload: PayloadHandle,
+  targets: DirectiveScanTarget[],
+  schemaVersion: number,
+  configKeys: Record<string, ConfigKeyType>,
+  configPathRefs: ConfigPathRef[],
+): Promise<void> {
+  const reads = new Map<string, Promise<string>>();
+  for (const target of targets) {
+    const file = `presets/${target.source}`;
+    let text = reads.get(target.source);
+    if (text === undefined) {
+      text = payload.read(target.source);
+      reads.set(target.source, text);
+    }
+    let blocks: DirectiveBlock[];
+    try {
+      blocks = scanDirectives(await text, target.scanPath);
+    } catch (error) {
+      throw relocateDirectiveError(error, target.scanPath, file);
+    }
+    const first = blocks[0];
+    if (first === undefined) {
+      continue;
+    }
+    if (schemaVersion < DIRECTIVES_MIN_SCHEMA_VERSION) {
+      throw new StreamctlError(
+        "CONFIG_INVALID",
+        `${file}:${first.ifLine}: uses template directives, which requires schemaVersion ${DIRECTIVES_MIN_SCHEMA_VERSION}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${schemaVersion}.`,
+        { file, line: first.ifLine, reason: "schema-version", found: schemaVersion, required: DIRECTIVES_MIN_SCHEMA_VERSION },
+      );
+    }
+    if (target.strategy === "merge") {
+      throw new StreamctlError(
+        "CONFIG_INVALID",
+        `${file}:${first.ifLine}: template directives are not supported in merge-strategy files.`,
+        { file, line: first.ifLine, reason: "merge-strategy" },
+      );
+    }
+    for (const block of blocks) {
+      const details = { file, line: block.ifLine, condition: block.condition };
+      if (configKeys[block.condition] === "object") {
+        throw new StreamctlError(
+          "CONFIG_INVALID",
+          `${file}:${block.ifLine}: condition "${block.condition}" names an object config key; use one of its fields instead.`,
+          { ...details, reason: "object-condition" },
+        );
+      }
+      configPathRefs.push({
+        where: `${target.kind} "${file}" line ${block.ifLine}`,
+        path: block.condition,
+        details: { ...details, reason: "undeclared-condition" },
+      });
+    }
+  }
 }
 
 /**
@@ -252,6 +336,19 @@ export async function resolvePresetChain(
       file.renderDef = def;
     }
   }
+
+  const scanTargets: DirectiveScanTarget[] = files.map(file => ({ source: file.source, scanPath: file.path, kind: "template", strategy: file.strategy }));
+  const fragmentSources = new Set<string>();
+  for (const key of new Set(renderKeyByPath.values())) {
+    for (const fragment of renders.get(key)?.fragments ?? []) {
+      if (!fragmentSources.has(fragment.source)) {
+        fragmentSources.add(fragment.source);
+        scanTargets.push({ source: fragment.source, scanPath: fragment.source, kind: "fragment" });
+      }
+    }
+  }
+  await validateDirectives(payload, scanTargets, manifest.schemaVersion, configKeys, configPathRefs);
+
   // A referenced config path is satisfied when it names a declared configKey exactly,
   // or descends into one declared `object` (the only declared type with addressable
   // children). Matching the root namespace alone was too loose: `ci.upgradePr` against a
@@ -266,7 +363,7 @@ export async function resolvePresetChain(
       throw new StreamctlError(
         "CONFIG_INVALID",
         `${ref.where} references config path "${ref.path}", which no preset declares in configKeys.${hint}`,
-        { path: ref.path, declared: known },
+        { path: ref.path, declared: known, ...ref.details },
       );
     }
   }

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 5,
+  "presets": ["app"],
+  "profiles": [{ "name": "std" }],
+  "defaultBase": "app"
+}
