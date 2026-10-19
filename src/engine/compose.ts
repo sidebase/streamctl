@@ -1,7 +1,9 @@
 import type { ManagedFile, StreamctlConfig } from "../config/types";
 import type { PayloadHandle } from "../payload/resolve";
+import { applyDirectives } from "../directives";
 import { StreamctlError } from "../errors";
 import { composeBlock } from "./block";
+import { evaluateCondition } from "./conditions";
 import { composeMerge } from "./merge";
 import { renderFile } from "./render";
 import { validateStructured } from "./structural";
@@ -40,22 +42,33 @@ function finalizeComposed(
   return validation.ok ? composed : { status: "structural-error", path, reason: validation.reason };
 }
 
-// Fragment sources are read from the payload here so `renderFile` itself stays pure.
+/**
+ * Directive pass first: `if`/`else`/`end` blocks are resolved on the template body
+ * and on each fragment body, before fragments are appended and placeholders
+ * substituted, so tokens inside a dropped block never need a value. Fragment
+ * sources are read here so `renderFile` itself stays pure.
+ */
 async function renderManagedTemplate(file: ManagedFile, payload: PayloadHandle, config: StreamctlConfig | undefined, deps: Record<string, string>): Promise<string> {
-  const raw = await payload.read(file.source);
+  const raw = applyDirectives(await payload.read(file.source), file.path, condition => evaluateCondition(config, condition, file.path));
   if (file.renderDef === undefined) {
     return raw;
   }
   const fragmentSources: Record<string, string> = {};
   for (const fragment of file.renderDef.fragments ?? []) {
-    if (!(fragment.source in fragmentSources)) {
-      fragmentSources[fragment.source] = await payload.read(fragment.source);
+    const source = fragment.source;
+    if (!(source in fragmentSources)) {
+      fragmentSources[source] = applyDirectives(await payload.read(source), source, condition => evaluateCondition(config, condition, source));
     }
   }
   return renderFile(raw, file.renderDef, config, fragmentSources, file.path, deps);
 }
 
-/** `deps` is the consumer's dependency map (see `dependencyMap`), built once per run by the caller and fed to placeholder `fromDependency` resolution. */
+/**
+ * The template (and its fragments) go through the directive pass, then `renderFile`
+ * when a `renderDef` exists, then the strategy below. `deps` is the consumer's
+ * dependency map (see `dependencyMap`), built once per run by the caller and fed to
+ * placeholder `fromDependency` resolution.
+ */
 export async function compose(
   file: ManagedFile,
   payload: PayloadHandle,

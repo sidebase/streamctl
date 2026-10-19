@@ -222,9 +222,7 @@ export function applyDirectives(text: string, path: string, evaluate: (condition
   for (const block of blocks) {
     const kept = evaluate(block.condition) !== block.negated;
     const branchEnd = block.elseLine ?? block.endLine;
-    const [from, to] = kept
-      ? [block.elseLine ?? block.endLine, block.endLine]
-      : [block.ifLine, branchEnd];
+    const [from, to] = kept ? [branchEnd, block.endLine] : [block.ifLine, branchEnd];
     drop.add(block.ifLine - 1);
     drop.add(block.endLine - 1);
     if (block.elseLine !== undefined) {
