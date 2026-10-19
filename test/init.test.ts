@@ -159,6 +159,46 @@ describe("runInit", () => {
     expect(config).not.toContain("__PROFILE__");
   });
 
+  it("runs the first sync with the scaffolded config's knobs", async () => {
+    await writeFile(join(repo, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^4.0.0" } }));
+    await writeFile(
+      join(configPkg, "presets", "config.template.ts"),
+      "export default { package: \"__PACKAGE__\", base: \"__BASE__\", version: \"__VERSION__\", profile: \"__PROFILE__\", ci: { lint: true } };\n",
+    );
+    await writeFile(join(configPkg, "presets", "base", "preset.json"), JSON.stringify({
+      name: "base",
+      files: [
+        { path: ".editorconfig", strategy: "full", source: "base/editorconfig" },
+        { path: "lint.txt", strategy: "full", source: "base/lint.txt", enabledBy: "ci.lint" },
+      ],
+      configKeys: { "ci.lint": "boolean" },
+    }));
+    await writeFile(join(configPkg, "presets", "base", "lint.txt"), "lint on\n");
+    const stderr = captureStderr();
+
+    const result = await runInit(baseOpts());
+
+    expect(await readFile(join(repo, "lint.txt"), "utf8")).toBe("lint on\n");
+    expect(result.sync?.written).toContain("lint.txt");
+    expect(stderr.join("")).not.toContain("could not load the scaffolded");
+  });
+
+  it("falls back to the bare config when the scaffolded one fails to load", async () => {
+    await writeFile(join(repo, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^4.0.0" } }));
+    await writeFile(
+      join(configPkg, "presets", "config.template.ts"),
+      "throw new Error(\"template exploded\");\nexport default { package: \"__PACKAGE__\", base: \"__BASE__\", version: \"__VERSION__\", profile: \"__PROFILE__\" };\n",
+    );
+    const stderr = captureStderr();
+
+    const result = await runInit(baseOpts());
+
+    const warnings = stderr.join("").split("\n").filter(line => line.includes("could not load the scaffolded"));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("template exploded");
+    expect(result.sync?.written).toContain(".editorconfig");
+  });
+
   it("does not overwrite a pre-existing wrapper", async () => {
     await writeFile(join(repo, "package.json"), JSON.stringify({ name: "app", devDependencies: { nuxt: "^4.0.0" } }));
     await writeFile(join(repo, "eslint.config.ts"), "export default localOverride()\n");
