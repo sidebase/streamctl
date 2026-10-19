@@ -2,6 +2,7 @@ import type { ZodError } from "zod";
 import { describe, expect, it } from "vitest";
 import { CONFIG_FILE, LEGACY_CONFIG_FILE } from "../src/config/resolve";
 import {
+  COMMA_JOIN_MIN_SCHEMA_VERSION,
   DIRECTIVES_MIN_SCHEMA_VERSION,
   managedFileSchema,
   payloadManifestSchema,
@@ -224,6 +225,10 @@ describe("RenderDef", () => {
     expect(renderDefSchema.safeParse({ fragments: [{ toggle: "ci.e2e", source: "a" }, { forEach: "ci.deploy", source: "b" }] }).success).toBe(true);
   });
 
+  it("accepts join: comma", () => {
+    expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", join: "comma" } } }).success).toBe(true);
+  });
+
   it("rejects an invalid placeholder join", () => {
     expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", join: "csv" } } }).success).toBe(false);
   });
@@ -302,6 +307,7 @@ describe("PayloadManifest schemaVersion contract", () => {
     expect([...SUPPORTED_SCHEMA_VERSIONS].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
     expect(SUPPORTED_SCHEMA_VERSION_LIST).toBe("2, 3, 4, 5");
     expect(DIRECTIVES_MIN_SCHEMA_VERSION).toBe(5);
+    expect(COMMA_JOIN_MIN_SCHEMA_VERSION).toBe(5);
   });
 
   // Plain refinement failure here; the loader is what turns it into SCHEMA_UNSUPPORTED.

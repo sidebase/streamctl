@@ -39,13 +39,16 @@ export const OMIT_LINE_MIN_SCHEMA_VERSION = 4;
 /** Lowest `schemaVersion` a payload may declare while using template directives (`streamctl:if`/`else`/`end`). */
 export const DIRECTIVES_MIN_SCHEMA_VERSION = 5;
 
+/** Lowest `schemaVersion` a payload may declare while using placeholder `join: "comma"`. */
+export const COMMA_JOIN_MIN_SCHEMA_VERSION = 5;
+
 /** The CLI checks shape only; semantics stay payload-owned. `"object"` is a presence + `typeof` check with no deep validation. */
 export const CONFIG_KEY_TYPES = ["boolean", "string", "string[]", "object"] as const;
 export type ConfigKeyType = (typeof CONFIG_KEY_TYPES)[number];
 
 /**
- * A `string[]` value is deduped + sorted, then joined per `join` (`space` or
- * `lines`). Substitution repeats until the text stops changing (at most 10 passes,
+ * A `string[]` value is deduped + sorted, then joined per `join` (`space`, `lines` or
+ * `comma`; `comma` requires `schemaVersion` {@link COMMA_JOIN_MIN_SCHEMA_VERSION}). Substitution repeats until the text stops changing (at most 10 passes,
  * so a self-referencing value fails); any leftover `${…}` then fails render.ts's
  * leftover-token check.
  *
@@ -62,7 +65,7 @@ export const placeholderSchema = z.strictObject({
   fromDependency: z.string().min(1).optional(),
   default: z.string(),
   pattern: z.string().min(1).optional(),
-  join: z.enum(["space", "lines"]).optional(),
+  join: z.enum(["space", "lines", "comma"]).optional(),
   omitLineIfEmpty: z.boolean().optional(),
 });
 

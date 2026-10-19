@@ -5,7 +5,7 @@ import type { ConfigKeyType, ManagedFile as ManifestManagedFile, PayloadManifest
 import type { PayloadHandle } from "../payload/resolve";
 import { scanDirectives } from "../directives";
 import { StreamctlError } from "../errors";
-import { DIRECTIVES_MIN_SCHEMA_VERSION, FROM_DEPENDENCY_MIN_SCHEMA_VERSION, OMIT_LINE_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
+import { COMMA_JOIN_MIN_SCHEMA_VERSION, DIRECTIVES_MIN_SCHEMA_VERSION, FROM_DEPENDENCY_MIN_SCHEMA_VERSION, OMIT_LINE_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
 
 const PAYLOAD_MANIFEST = "presets/manifest.json";
 
@@ -122,6 +122,19 @@ export async function loadPresetManifest(payload: PayloadHandle, name: string, m
             "CONFIG_INVALID",
             `${file} renders.${render} placeholder "${key}" uses ${feature}, which requires schemaVersion ${required}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${manifest.schemaVersion}.`,
             { file, preset: name, render, placeholder: key, found: manifest.schemaVersion, required },
+          );
+        }
+      }
+    }
+  }
+  if (manifest.schemaVersion < COMMA_JOIN_MIN_SCHEMA_VERSION) {
+    for (const [render, def] of Object.entries(preset.renders ?? {})) {
+      for (const [key, placeholder] of Object.entries(def.placeholders ?? {})) {
+        if (placeholder.join === "comma") {
+          throw new StreamctlError(
+            "CONFIG_INVALID",
+            `${file} renders.${render} placeholder "${key}" uses join: "comma", which requires schemaVersion ${COMMA_JOIN_MIN_SCHEMA_VERSION}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${manifest.schemaVersion}.`,
+            { file, preset: name, render, placeholder: key, found: manifest.schemaVersion, required: COMMA_JOIN_MIN_SCHEMA_VERSION },
           );
         }
       }

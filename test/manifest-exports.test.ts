@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { StreamctlError } from "../src/errors";
-import { commentSyntaxFor, DIRECTIVES_MIN_SCHEMA_VERSION, scanDirectives, SUPPORTED_SCHEMA_VERSION } from "../src/manifest";
+import { COMMA_JOIN_MIN_SCHEMA_VERSION, commentSyntaxFor, DIRECTIVES_MIN_SCHEMA_VERSION, scanDirectives, SUPPORTED_SCHEMA_VERSION } from "../src/manifest";
 
 describe("@sidebase/streamctl/manifest exports", () => {
   it("exposes the directive scanner and comment syntax", () => {
@@ -24,5 +24,6 @@ describe("@sidebase/streamctl/manifest exports", () => {
   it("exposes the schema constants", () => {
     expect(SUPPORTED_SCHEMA_VERSION).toBe(5);
     expect(DIRECTIVES_MIN_SCHEMA_VERSION).toBe(5);
+    expect(COMMA_JOIN_MIN_SCHEMA_VERSION).toBe(5);
   });
 });

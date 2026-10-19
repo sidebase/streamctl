@@ -185,6 +185,32 @@ describe("omitLineIfEmpty feature gate", () => {
   });
 });
 
+describe("join: comma feature gate", () => {
+  function withCommaJoin(schemaVersion: number): PayloadHandle {
+    return payloadOf({
+      "manifest.json": { schemaVersion, presets: ["base"], profiles: [], defaultBase: "base" },
+      "base/preset.json": {
+        name: "base",
+        files: [{ path: "Dockerfile", strategy: "full", source: "Dockerfile", render: "dockerfile" }],
+        renders: { dockerfile: { placeholders: { BUILT: { configPath: "pnpm.onlyBuiltDependencies", default: "", join: "comma" } } } },
+        configKeys: { "pnpm.onlyBuiltDependencies": "string[]" },
+      },
+    });
+  }
+
+  it("lets a v5 payload declare it", async () => {
+    const { files } = await resolvePresetChain(withCommaJoin(5), "base", "nuxt-4");
+    expect(files.find(f => f.path === "Dockerfile")?.renderDef?.placeholders?.BUILT?.join).toBe("comma");
+  });
+
+  it("refuses it under a v4 payload, naming the placeholder and the version it needs", async () => {
+    const error = await caught(resolvePresetChain(withCommaJoin(4), "base", "nuxt-4"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toBe("presets/base/preset.json renders.dockerfile placeholder \"BUILT\" uses join: \"comma\", which requires schemaVersion 5, but presets/manifest.json declares schemaVersion 4.");
+    expect(error.details).toMatchObject({ file: "presets/base/preset.json", render: "dockerfile", placeholder: "BUILT", found: 4, required: 5 });
+  });
+});
+
 describe("resolvePresetChain (v2 payload)", () => {
   it("walks the extends chain parents-first and merges the baseline", async () => {
     const { files, baseline } = await resolvePresetChain(validPayload(), "nuxt-app", "nuxt-4");
