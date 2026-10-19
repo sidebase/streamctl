@@ -210,7 +210,7 @@ steps:
 - A condition is a config path declared in some preset's `configKeys`; `true`, a non-empty string or a non-empty array is true.
 - Directive lines are always removed; the inactive branch is removed with them.
 - `if`/`else`/`end` share one indentation; JSON files and `merge` files reject directives.
-- Needs manifest `schemaVersion: 5`. Every mistake fails with `CONFIG_INVALID`, naming file and line.
+- Needs manifest `schemaVersion: 5`. Every mistake fails with `CONFIG_INVALID`, naming the file (and line).
 
 Full rules in [template directives](docs/reference.md#template-directives).
 

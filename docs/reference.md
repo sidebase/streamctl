@@ -139,7 +139,7 @@ Payload templates and fragments can mark runs of whole lines as conditional. Req
 
 ### Grammar
 
-One directive per line: optional indent, the file's comment token, optional spaces, `streamctl:`, the verb, one or more spaces, the condition, and ` -->` for HTML-comment files. Nothing else may follow.
+One directive per line: optional indent, the file's comment token, optional spaces, `streamctl:`, the verb, one or more spaces, the condition, and for HTML-comment files optional spaces then `-->`. Nothing else may follow.
 
 ```
 <token> streamctl:if <condition>
@@ -158,7 +158,7 @@ One directive per line: optional indent, the file's comment token, optional spac
 | Comment token | Files |
 | ------------- | ----- |
 | `#` | YAML, Dockerfile, ignore files, `.editorconfig`, ini, sh, any unknown extension |
-| `//` | js, mjs, cjs, ts, mts, cts |
+| `//` | js, mjs, cjs, ts, mts, cts (json, jsonc and json5 also use `//` but reject directives) |
 | `<!-- ... -->` | md, markdown, html, htm, vue |
 
 `full`, `scaffold` and `block` templates accept directives, with or without a `render` definition, as do fragment sources. `.json`, `.jsonc` and `.json5` targets reject them (`structured-json`), and so do `merge` templates (`merge-strategy`). The token is chosen by the target path for templates and by the source path for fragments.
@@ -197,7 +197,11 @@ The condition must be declared in the merged `configKeys`, either exactly or und
 
 ### Errors
 
-Every directive error is `CONFIG_INVALID` (exit `1`). The message reads `<presets/...>:<line>: <sentence>`; `details` carries `file`, `line`, `reason` and, where relevant, `directive`, `condition`, `expected`, `openedAt`, `found`.
+Every directive error is `CONFIG_INVALID` (exit `1`), with `details.reason` set to one of the values below.
+
+- Parse and chain-time errors read `presets/<source>:<line>: <sentence>`. `details` carries `file`, `line`, `reason` and, where relevant, `directive`, `condition`, `expected`, `openedAt`, `found`, `required`.
+- `undeclared-condition` uses the message shared with placeholders and `enabledBy`: `template "presets/<source>" line N references config path "...", which no preset declares in configKeys.` (`fragment "..."` for fragments). `details` carries `path`, `declared`, `file`, `line`, `condition`, `reason`.
+- `unevaluable-value` is raised at render time against the target path: `<target>: condition "..." has a <type> value in the config, ...`. `details` is `{ file, condition, reason, found }`, without `line`.
 
 | `reason` | Meaning |
 | -------- | ------- |
@@ -225,9 +229,9 @@ Payload tooling can list a template's blocks with `scanDirectives(text, path)` f
 ### Caveats
 
 - `scaffold` files evaluate directives once, when they are written. Later config changes do not touch them.
-- Dockerfile parser directives (`# syntax=`, `# escape=`) must stay the first lines. Docker stops looking for them after the first ordinary comment, so put streamctl directives after them. Comment lines inside a `RUN \` continuation are removed by Docker, so a block inside a continuation works as long as the continuation does not end on a removed line.
+- Dockerfile parser directives (`# syntax=`, `# escape=`) must stay the first lines. Docker stops looking for them after the first ordinary comment, so put streamctl directives after them. A block inside a `RUN \` continuation must not hold the line that ends the continuation: dropping it leaves a dangling `\`.
 - Inside a YAML block scalar (`run: |`) a `# streamctl:if` line is string content to YAML but still a directive to streamctl. It is removed before YAML parses the output.
-- Flipping a knob that changes a block in a `full` file shows up as drift, like any other render change (see [Known caveats](#known-caveats)).
+- Flipping a knob that changes a block in a `full` file is a render change like any other: `check` reports drift (exit `3`), `status` shows the file as `conflict`, and `sync` blocks it as an `edit` conflict until you resolve it with `--interactive` or `--force` (see [Known caveats](#known-caveats)).
 
 ### Indent-aware substitution
 
