@@ -1,43 +1,6 @@
-import { basename, extname } from "node:path";
+import { commentSyntaxFor } from "../comment-syntax";
 
-/** Marker comment delimiters for a file format. Line comments leave `suffix` empty. */
-interface CommentSyntax {
-  prefix: string;
-  suffix: string;
-}
-
-const HASH: CommentSyntax = { prefix: "# ", suffix: "" };
-const SLASH: CommentSyntax = { prefix: "// ", suffix: "" };
-const HTML: CommentSyntax = { prefix: "<!-- ", suffix: " -->" };
-
-export function commentSyntaxFor(path: string): CommentSyntax {
-  const base = basename(path).toLowerCase();
-  if (base === "dockerfile") {
-    return HASH;
-  }
-  switch (extname(base)) {
-    case ".js":
-    case ".mjs":
-    case ".cjs":
-    case ".ts":
-    case ".mts":
-    case ".cts":
-    case ".json":
-    case ".jsonc":
-    case ".json5":
-      // JSONC-tolerant config files (oxlintrc/tsconfig) use `//`, never `#`.
-      return SLASH;
-    case ".html":
-    case ".htm":
-    case ".md":
-    case ".markdown":
-    case ".vue":
-      return HTML;
-    // `#` covers npmrc, gitignore, editorconfig, yaml/yml, toml, ini, conf, sh.
-    default:
-      return HASH;
-  }
-}
+export { commentSyntaxFor };
 
 export type BlockResult
   = | { ok: true; content: string }
