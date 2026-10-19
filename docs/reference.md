@@ -244,6 +244,18 @@ run: |
 
 With `SCRIPT` = `"pnpm lint\npnpm test"` this renders both commands at the `run` body's indentation.
 
+### Placeholder join modes
+
+A `string[]` placeholder value is deduped and sorted alphabetically (not config order), then joined per `join`:
+
+| `join` | Separator | Shell-metacharacter check | Needs `schemaVersion` |
+| --- | --- | --- | --- |
+| `space` (default) | `" "` | yes, per item | 2 |
+| `lines` | `"\n"` | no | 2 |
+| `comma` | `", "` | no | 5 |
+
+The metacharacter check rejects whitespace and `` ; | & $ ` < > ( ) { } \ ' " * ? [ ] `` in each item, because space-joined values typically land in an unquoted shell interpolation. `comma` targets YAML flow sequences such as `branches: [${BRANCHES}]` and skips it, so `release/*` passes; guard it with the placeholder `pattern`, which is tested against the whole joined value in every mode.
+
 ## Known caveats
 
 **Type-aware lint needs generated types first.** With `LINT_TYPEAWARE=true`, the Prisma client and the Nuxt types have to exist before `lint` (and `typecheck`) runs, so run `prisma generate` and `nuxi prepare` first. The managed `ci.yaml` already orders `prisma generate` ahead of `lint`, and `postinstall: "nuxt prepare"` covers local installs. There is no preflight check for this.

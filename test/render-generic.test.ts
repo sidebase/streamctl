@@ -99,6 +99,25 @@ describe("renderFile: placeholders", () => {
     const def: RenderDef = { placeholders: { ENVS: { configPath: "aptPackages", default: "", join: "lines" } } };
     expect(renderFile("${ENVS}\n", def, cfg({ aptPackages: ["A=1;2", "B=3"] }), {})).toBe("A=1;2\nB=3\n");
   });
+
+  it("comma-joins a deduped, sorted string[] for a YAML flow sequence", () => {
+    const def: RenderDef = { placeholders: { BRANCHES: { configPath: "aptPackages", default: "", join: "comma" } } };
+    expect(renderFile("branches: [${BRANCHES}]\n", def, cfg({ aptPackages: ["main", "dev", "main"] }), {})).toBe("branches: [dev, main]\n");
+  });
+
+  it("skips the shell-meta floor for comma-joined values but keeps it for space", () => {
+    const comma: RenderDef = { placeholders: { BRANCHES: { configPath: "aptPackages", default: "", join: "comma" } } };
+    expect(renderFile("branches: [${BRANCHES}]\n", comma, cfg({ aptPackages: ["release/*", "main"] }), {})).toBe("branches: [main, release/*]\n");
+
+    const space: RenderDef = { placeholders: { BRANCHES: { configPath: "aptPackages", default: "", join: "space" } } };
+    expect(() => renderFile("${BRANCHES}\n", space, cfg({ aptPackages: ["release/*"] }), {})).toThrow(/shell metacharacter/);
+  });
+
+  it("tests `pattern` against the whole comma-joined value", () => {
+    const def: RenderDef = { placeholders: { BRANCHES: { configPath: "aptPackages", default: "", join: "comma", pattern: "^[a-z]+(, [a-z]+)*$" } } };
+    expect(renderFile("[${BRANCHES}]\n", def, cfg({ aptPackages: ["main", "dev"] }), {})).toBe("[dev, main]\n");
+    expect(() => renderFile("[${BRANCHES}]\n", def, cfg({ aptPackages: ["main", "re]lease"] }), {})).toThrow(/has value "main, re\]lease", which violates its pattern/);
+  });
 });
 
 describe("renderFile: fromDependency", () => {

@@ -45,7 +45,8 @@ function configStringList(config: StreamctlConfig | undefined, path: string): st
 
 // Space-joined values land in a single unquoted shell interpolation (e.g.
 // `apt-get install $APT_PACKAGES`), so any of these chars could inject commands.
-// A floor, independent of the payload's optional `pattern`.
+// A floor, independent of the payload's optional `pattern`. `comma` skips it: comma
+// lists target YAML flow sequences, not shell interpolation, so `pattern` is the guard.
 const SHELL_META_RE = /[\s;|&$`<>(){}\\'"*?[\]]/;
 
 /** A full `x.y.z` triple with an optional prerelease tail. */
@@ -77,20 +78,24 @@ function resolvePlaceholder(def: Placeholder, config: StreamctlConfig | undefine
   const raw = readConfigPath(config, def.configPath);
   if (Array.isArray(raw)) {
     const list = [...new Set(raw.filter((item): item is string => typeof item === "string"))].sort();
-    if (def.join !== "lines") {
-      // Reject metacharacters per item, before the join spaces get added.
-      for (const item of list) {
-        if (SHELL_META_RE.test(item)) {
-          throw new StreamctlError(
-            "CONFIG_INVALID",
-            `render placeholder "${key}" for "${filePath}" has a space-joined value ${JSON.stringify(item)} containing a shell metacharacter (whitespace or one of ; | & $ \` < > ( ) { } \\ ' " * ? [ ]).`,
-            { file: filePath, placeholder: key, value: item },
-          );
+    switch (def.join) {
+      case "lines":
+        return list.join("\n");
+      case "comma":
+        return list.join(", ");
+      default:
+        // Reject metacharacters per item, before the join spaces get added.
+        for (const item of list) {
+          if (SHELL_META_RE.test(item)) {
+            throw new StreamctlError(
+              "CONFIG_INVALID",
+              `render placeholder "${key}" for "${filePath}" has a space-joined value ${JSON.stringify(item)} containing a shell metacharacter (whitespace or one of ; | & $ \` < > ( ) { } \\ ' " * ? [ ]).`,
+              { file: filePath, placeholder: key, value: item },
+            );
+          }
         }
-      }
-      return list.join(" ");
+        return list.join(" ");
     }
-    return list.join("\n");
   }
   if (typeof raw === "string") {
     return raw;
