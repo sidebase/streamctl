@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { commentSyntaxFor, composeBlock } from "../src/engine/block";
+import { commentSyntaxFor } from "../src/comment-syntax";
+import { composeBlock } from "../src/engine/block";
 
 describe("commentSyntaxFor", () => {
   it("uses # for npmrc, gitignore, yaml, editorconfig and dockerfiles", () => {

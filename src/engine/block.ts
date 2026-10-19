@@ -1,7 +1,5 @@
 import { commentSyntaxFor } from "../comment-syntax";
 
-export { commentSyntaxFor };
-
 export type BlockResult
   = | { ok: true; content: string }
     | { ok: false; reason: string };
