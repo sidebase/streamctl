@@ -90,7 +90,13 @@ function isVerb(value: string): value is Verb {
   return value === "if" || value === "else" || value === "end";
 }
 
-function parseDirective(path: string, lineNo: number, indent: string, rawRest: string, suffix: string): DirectiveLine {
+interface DirectiveParseError {
+  reason: DirectiveReason;
+  message: string;
+  extra: DetailExtras;
+}
+
+function parseDirective(lineNo: number, indent: string, rawRest: string, suffix: string): DirectiveLine | DirectiveParseError {
   let rest = rawRest.trimEnd();
   const hasSuffix = suffix === "" || rest.endsWith(suffix);
   if (suffix !== "" && hasSuffix) {
@@ -107,20 +113,20 @@ function parseDirective(path: string, lineNo: number, indent: string, rawRest: s
     } else if (verb === "" && words[0] !== undefined && isVerb(words[0])) {
       hint = ` No space is allowed after "streamctl:"; write "streamctl:${words[0]}".`;
     }
-    fail(path, lineNo, "unknown-directive", `unknown directive "streamctl:${verb}".${hint}`, { directive: verb });
+    return { reason: "unknown-directive", message: `unknown directive "streamctl:${verb}".${hint}`, extra: { directive: verb } };
   }
   if (!hasSuffix) {
-    fail(path, lineNo, "malformed-condition", `"streamctl:${verb}" must be closed with "${suffix}" on the same line.`, { directive: verb });
+    return { reason: "malformed-condition", message: `"streamctl:${verb}" must be closed with "${suffix}" on the same line.`, extra: { directive: verb } };
   }
   const [rawCondition, ...extra] = words;
   if (rawCondition === undefined) {
-    fail(path, lineNo, "missing-condition", `"streamctl:${verb}" requires a condition.`, { directive: verb });
+    return { reason: "missing-condition", message: `"streamctl:${verb}" requires a condition.`, extra: { directive: verb } };
   }
   if (extra.length > 0) {
-    fail(path, lineNo, "malformed-condition", `"streamctl:${verb} ${rawCondition}" is followed by unexpected text "${extra.join(" ")}".`, { directive: verb, condition: rawCondition });
+    return { reason: "malformed-condition", message: `"streamctl:${verb} ${rawCondition}" is followed by unexpected text "${extra.join(" ")}".`, extra: { directive: verb, condition: rawCondition } };
   }
   if (!CONDITION_RE.test(rawCondition)) {
-    fail(path, lineNo, "malformed-condition", `"${rawCondition}" is not a valid condition; use a dotted config path such as "features.prisma", optionally prefixed with "!".`, { directive: verb, condition: rawCondition });
+    return { reason: "malformed-condition", message: `"${rawCondition}" is not a valid condition; use a dotted config path such as "features.prisma", optionally prefixed with "!".`, extra: { directive: verb, condition: rawCondition } };
   }
   return { line: lineNo, indent, verb, rawCondition };
 }
@@ -152,6 +158,23 @@ function closeBlock(open: OpenBlock, endLine: number): DirectiveBlock {
   return block;
 }
 
+/**
+ * Line (1-based) of the first well-formed `if`/`else`/`end` directive, ignoring block
+ * structure; any other `streamctl:` comment counts as content. Payloads below
+ * schemaVersion 5 use this, so prose comments keep rendering verbatim while a real
+ * directive still trips the schemaVersion gate.
+ */
+export function findDirectiveLine(text: string, path: string): number | undefined {
+  const { candidate, suffix } = buildCandidateMatcher(path);
+  for (const [index, rawLine] of text.split("\n").entries()) {
+    const match = candidate.exec(rawLine.replace(/\r$/, ""));
+    if (match !== null && !("reason" in parseDirective(index + 1, match[1] ?? "", match[2] ?? "", suffix))) {
+      return index + 1;
+    }
+  }
+  return undefined;
+}
+
 /** Parse and validate every directive in `text`; throws `CONFIG_INVALID` on the first error. */
 export function scanDirectives(text: string, path: string): DirectiveBlock[] {
   const { candidate, suffix } = buildCandidateMatcher(path);
@@ -169,7 +192,10 @@ export function scanDirectives(text: string, path: string): DirectiveBlock[] {
     if (format === "json" || format === "json5") {
       fail(path, lineNo, "structured-json", "template directives are not supported in JSON files.");
     }
-    const directive = parseDirective(path, lineNo, match[1] ?? "", match[2] ?? "", suffix);
+    const directive = parseDirective(lineNo, match[1] ?? "", match[2] ?? "", suffix);
+    if ("reason" in directive) {
+      fail(path, lineNo, directive.reason, directive.message, directive.extra);
+    }
     const { verb, rawCondition, indent } = directive;
     const extra = { directive: verb, condition: rawCondition };
 

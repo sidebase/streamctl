@@ -3,7 +3,7 @@ import type { ManagedFile as EngineManagedFile } from "../config/types";
 import type { DirectiveBlock, DirectiveErrorDetails } from "../directives";
 import type { ConfigKeyType, ManagedFile as ManifestManagedFile, PayloadManifest, PresetManifest, RenderDef } from "../manifest/schema";
 import type { PayloadHandle } from "../payload/resolve";
-import { scanDirectives } from "../directives";
+import { findDirectiveLine, scanDirectives } from "../directives";
 import { StreamctlError } from "../errors";
 import { COMMA_JOIN_MIN_SCHEMA_VERSION, DIRECTIVES_MIN_SCHEMA_VERSION, FROM_DEPENDENCY_MIN_SCHEMA_VERSION, OMIT_LINE_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
 
@@ -202,6 +202,18 @@ async function validateDirectives(
       text = payload.read(target.source);
       reads.set(target.source, text);
     }
+    // Below the gate, `streamctl:` prose stays content; only a well-formed directive fails.
+    if (schemaVersion < DIRECTIVES_MIN_SCHEMA_VERSION) {
+      const line = findDirectiveLine(await text, target.scanPath);
+      if (line !== undefined) {
+        throw new StreamctlError(
+          "CONFIG_INVALID",
+          `${file}:${line}: uses template directives, which requires schemaVersion ${DIRECTIVES_MIN_SCHEMA_VERSION}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${schemaVersion}.`,
+          { file, line, reason: "schema-version", found: schemaVersion, required: DIRECTIVES_MIN_SCHEMA_VERSION } satisfies DirectiveErrorDetails,
+        );
+      }
+      continue;
+    }
     let blocks: DirectiveBlock[];
     try {
       blocks = scanDirectives(await text, target.scanPath);
@@ -211,13 +223,6 @@ async function validateDirectives(
     const first = blocks[0];
     if (first === undefined) {
       continue;
-    }
-    if (schemaVersion < DIRECTIVES_MIN_SCHEMA_VERSION) {
-      throw new StreamctlError(
-        "CONFIG_INVALID",
-        `${file}:${first.ifLine}: uses template directives, which requires schemaVersion ${DIRECTIVES_MIN_SCHEMA_VERSION}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${schemaVersion}.`,
-        { file, line: first.ifLine, reason: "schema-version", found: schemaVersion, required: DIRECTIVES_MIN_SCHEMA_VERSION } satisfies DirectiveErrorDetails,
-      );
     }
     if (target.strategy === "merge") {
       throw new StreamctlError(
@@ -338,6 +343,12 @@ export async function resolvePresetChain(
         `file "${ref.file}" uses render "${ref.render}", which no preset in the chain declares in renders.`,
         { file: ref.file, render: ref.render },
       );
+    }
+  }
+
+  if (manifest.schemaVersion < DIRECTIVES_MIN_SCHEMA_VERSION) {
+    for (const file of files) {
+      file.skipDirectives = true;
     }
   }
 

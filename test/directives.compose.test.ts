@@ -108,6 +108,11 @@ describe("compose: directive pass", () => {
     expect(content(await compose(file, payload, null, cfg()))).toBe("jobs:\n  lint: true\n");
   });
 
+  it("passes the template through verbatim when skipDirectives is set", async () => {
+    const file: ManagedFile = { path: ".github/workflows/ci.yaml", strategy: "full", source: "base/ci.yaml", skipDirectives: true };
+    expect(content(await compose(file, payload, null, cfg()))).toBe("jobs:\n  # streamctl:if ci.deploy\n  deploy: ${DEPLOY}\n  # streamctl:end ci.deploy\n  lint: true\n");
+  });
+
   it("skips the pattern check of a placeholder used only in a dropped block", async () => {
     const renderDef = { placeholders: { DEPLOY: { configPath: "ci.target", default: "", pattern: "^[a-z]+$" } } };
     const file: ManagedFile = { path: ".github/workflows/ci.yaml", strategy: "full", source: "base/ci.yaml", renderDef };

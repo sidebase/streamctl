@@ -507,6 +507,28 @@ describe("chain-time directive validation", () => {
     expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "schema-version" });
   });
 
+  it("treats streamctl: prose as content on a schema-4 payload and marks files to skip directives", async () => {
+    const prose = "# streamctl: managed file\nname: ci\n";
+    const { files } = await resolvePresetChain(directivePayload({ schemaVersion: 4, sources: { "base/ci.yaml": prose } }), "base", "nuxt-4");
+    expect(files[0]).toMatchObject({ path: ".github/workflows/ci.yaml", skipDirectives: true });
+  });
+
+  it("still rejects a well-formed directive below prose on a schema-4 payload", async () => {
+    const payload = directivePayload({ schemaVersion: 4, sources: { "base/ci.yaml": `# streamctl: managed file\n${block}` } });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 2, reason: "schema-version" });
+  });
+
+  it("leaves skipDirectives unset on a schema-5 payload", async () => {
+    const { files } = await resolvePresetChain(directivePayload(), "base", "nuxt-4");
+    expect(files[0]?.skipDirectives).toBeUndefined();
+  });
+
+  it("rejects streamctl: prose on a schema-5 payload", async () => {
+    const error = await caught(resolvePresetChain(directivePayload({ sources: { "base/ci.yaml": "# streamctl: managed file\n" } }), "base", "nuxt-4"));
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "unknown-directive" });
+  });
+
   it("rejects an undeclared condition, naming file and line", async () => {
     const error = await caught(resolvePresetChain(directivePayload({ configKeys: { "ci.lint": "boolean" } }), "base", "nuxt-4"));
     expect(error.message).toContain("template \"presets/base/ci.yaml\" line 1 references config path \"ci.deploy\", which no preset declares in configKeys");

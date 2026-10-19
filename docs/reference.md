@@ -135,7 +135,7 @@ The `--json` `data` is `{ files: { path, state, strategy }[], payload: { package
 
 ## Template directives
 
-Payload templates and fragments can mark runs of whole lines as conditional. Requires manifest `schemaVersion: 5` (`DIRECTIVES_MIN_SCHEMA_VERSION`).
+Payload templates and fragments can mark runs of whole lines as conditional. Requires manifest `schemaVersion: 5` (`DIRECTIVES_MIN_SCHEMA_VERSION`). Below schemaVersion 5, `streamctl:` comments are plain content; only a well-formed `if`/`else`/`end` line is detected, to raise the `schema-version` error.
 
 ### Grammar
 
@@ -219,7 +219,7 @@ Every directive error is `CONFIG_INVALID` (exit `1`), with `details.reason` set 
 | `body-outdented` | YAML only: a body line indented less than the directives |
 | `structured-json` | Directive in a `.json`/`.jsonc`/`.json5` target |
 | `merge-strategy` | Directive in a `merge` template |
-| `schema-version` | Directive present but the manifest declares `schemaVersion` below 5 |
+| `schema-version` | Well-formed directive present but the manifest declares `schemaVersion` below 5 |
 | `undeclared-condition` | Condition not declared in any preset's `configKeys` |
 | `object-condition` | Condition names an `object` key exactly |
 | `unevaluable-value` | At render: the consumer config holds a number, object or `null` at the condition |

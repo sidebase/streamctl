@@ -43,13 +43,15 @@ function finalizeComposed(
 }
 
 /**
- * Directive pass first: `if`/`else`/`end` blocks are resolved on the template body
- * and on each fragment body, before fragments are appended and placeholders
- * substituted, so tokens inside a dropped block never need a value. Fragment
- * sources are read here so `renderFile` itself stays pure.
+ * Directive pass first (skipped below schemaVersion 5): `if`/`else`/`end` blocks are
+ * resolved on the template body and on each fragment body, before fragments are
+ * appended and placeholders substituted, so tokens inside a dropped block never need
+ * a value. Fragment sources are read here so `renderFile` itself stays pure.
  */
 async function renderManagedTemplate(file: ManagedFile, payload: PayloadHandle, config: StreamctlConfig | undefined, deps: Record<string, string>): Promise<string> {
-  const raw = applyDirectives(await payload.read(file.source), file.path, condition => evaluateCondition(config, condition, file.path));
+  const resolve = (text: string, path: string): string =>
+    file.skipDirectives === true ? text : applyDirectives(text, path, condition => evaluateCondition(config, condition, path));
+  const raw = resolve(await payload.read(file.source), file.path);
   if (file.renderDef === undefined) {
     return raw;
   }
@@ -57,7 +59,7 @@ async function renderManagedTemplate(file: ManagedFile, payload: PayloadHandle, 
   for (const fragment of file.renderDef.fragments ?? []) {
     const source = fragment.source;
     if (!(source in fragmentSources)) {
-      fragmentSources[source] = applyDirectives(await payload.read(source), source, condition => evaluateCondition(config, condition, source));
+      fragmentSources[source] = resolve(await payload.read(source), source);
     }
   }
   return renderFile(raw, file.renderDef, config, fragmentSources, file.path, deps);

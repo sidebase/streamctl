@@ -1,6 +1,6 @@
 import type { DirectiveErrorDetails } from "../src/directives";
 import { describe, expect, it, vi } from "vitest";
-import { applyDirectives, scanDirectives } from "../src/directives";
+import { applyDirectives, findDirectiveLine, scanDirectives } from "../src/directives";
 import { StreamctlError } from "../src/errors";
 
 function isDirectiveErrorDetails(value: unknown): value is DirectiveErrorDetails {
@@ -207,6 +207,23 @@ describe("scanDirectives: errors", () => {
 
   it("does not apply the YAML body rule to other files", () => {
     expect(scanDirectives("  # streamctl:if a\nx\n  # streamctl:end a\n", ".npmrc")).toHaveLength(1);
+  });
+});
+
+describe("findDirectiveLine", () => {
+  it("ignores streamctl: prose and malformed lines", () => {
+    expect(findDirectiveLine("# streamctl: managed file\n# streamctl:if bad cond!\n# streamctl:each x\n", "ci.yaml")).toBeUndefined();
+    expect(findDirectiveLine("<!-- streamctl: do not edit -->\n<!-- streamctl:if a\n", "NOTES.md")).toBeUndefined();
+  });
+
+  it("returns the first well-formed if, else or end line", () => {
+    expect(findDirectiveLine("a\n# streamctl:if a.b\n", "ci.yaml")).toBe(2);
+    expect(findDirectiveLine("# streamctl: note\n# streamctl:end a\n", "Dockerfile")).toBe(2);
+    expect(findDirectiveLine("<!-- streamctl:if a -->\r\n", "NOTES.md")).toBe(1);
+  });
+
+  it("ignores directives written with another file's comment token", () => {
+    expect(findDirectiveLine("// streamctl:if a\n", "ci.yaml")).toBeUndefined();
   });
 });
 
