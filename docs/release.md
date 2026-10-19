@@ -51,7 +51,7 @@ Two things worth knowing:
 ## Versioning
 
 What couples the CLI to a payload is the manifest's `schemaVersion` (currently
-`4`), not the package version. A CLI accepts a set of versions — `{2, 3, 4}` today —
+`5`), not the package version. A CLI accepts a set of versions — `{2, 3, 4, 5}` today —
 exported at the `./manifest` subpath as `SUPPORTED_SCHEMA_VERSION` (the current
 one) plus `SUPPORTED_SCHEMA_VERSIONS` (the accepted set). Adding a version is a
 minor when older ones keep parsing, **a major once one is dropped**; either way
@@ -74,6 +74,10 @@ Generated notes only cover commit subjects, so add these by hand.
   wrap lines in `streamctl:if <cond>` / `streamctl:else <cond>` /
   `streamctl:end <cond>` comments; inactive branches and all directive lines are
   removed at render. See [template directives](reference.md#template-directives).
+- **Placeholder `join: "comma"`** (schemaVersion 5): a `string[]` knob renders as
+  `a, b, c`, e.g. for YAML flow sequences like `branches: [${BRANCHES}]`. No
+  shell-metacharacter check in this mode; use the placeholder `pattern`. Gate
+  constant `COMMA_JOIN_MIN_SCHEMA_VERSION` is exported from `./manifest`.
 - `scanDirectives`, `commentSyntaxFor` and `DIRECTIVES_MIN_SCHEMA_VERSION` are
   exported from `@sidebase/streamctl/manifest`; `SUPPORTED_SCHEMA_VERSION` is now 5.
 - Chain resolution now reads and scans every template and fragment source,
