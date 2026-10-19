@@ -299,7 +299,7 @@ describe("PayloadManifest schemaVersion contract", () => {
   });
 
   it("lists 2 through 5 and gates directives at 5", () => {
-    expect([...SUPPORTED_SCHEMA_VERSIONS].sort()).toEqual([2, 3, 4, 5]);
+    expect([...SUPPORTED_SCHEMA_VERSIONS].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
     expect(SUPPORTED_SCHEMA_VERSION_LIST).toBe("2, 3, 4, 5");
     expect(DIRECTIVES_MIN_SCHEMA_VERSION).toBe(5);
   });
