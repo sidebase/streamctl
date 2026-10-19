@@ -300,6 +300,12 @@ describe("renderFile: indent-aware substitution", () => {
     expect(renderFile("  ${A}\n", { placeholders: { B: b, A: a } }, cfg(), {})).toBe(expected);
   });
 
+  it("indents content that follows a value ending in a newline", () => {
+    const def: RenderDef = { placeholders: { A: { configPath: "ci.a", default: "a\n" }, B: { configPath: "ci.b", default: "b" } } };
+    expect(renderFile("run: |\n  ${A}${B}\n", def, cfg(), {})).toBe("run: |\n  a\n  b\n");
+    expect(renderFile("  ${A}tail\n", def, cfg(), {})).toBe("  a\n  tail\n");
+  });
+
   it("lands $& and $1 verbatim", () => {
     expect(renderFile("  ${SCRIPT}\n", script("x $& y\n$1"), cfg(), {})).toBe("  x $& y\n  $1\n");
   });

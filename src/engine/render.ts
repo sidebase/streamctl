@@ -253,13 +253,8 @@ export function renderFile(
   const substitutePass = (text: string): string =>
     text.split("\n").map((line) => {
       const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
-      return line.replace(LEFTOVER_TOKEN_RE, (token: string, name: string) => {
-        const value = values.get(name);
-        if (value === undefined) {
-          return token;
-        }
-        return value.split("\n").map((part, index) => index === 0 || part === "" ? part : indent + part).join("\n");
-      });
+      const replaced = line.replace(LEFTOVER_TOKEN_RE, (token: string, name: string) => values.get(name) ?? token);
+      return replaced.split("\n").map((part, index) => index === 0 || part === "" ? part : indent + part).join("\n");
     }).join("\n");
 
   for (let pass = 1; ; pass++) {
