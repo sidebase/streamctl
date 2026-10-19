@@ -58,17 +58,16 @@ describe("evaluateCondition", () => {
     [null, "null"],
     [{ a: 1 }, "object"],
   ])("rejects %j as unevaluable", (value, found) => {
-    const config: unknown = { ...cfg(), ci: { flag: value } };
     let caught: unknown;
     try {
-      evaluateCondition(config as StreamctlConfig, "ci.flag", "ci.yaml");
+      evaluateCondition(cfg({ eslint: { flag: value } }), "eslint.flag", "ci.yaml");
     } catch (error) {
       caught = error;
     }
     expect(caught).toBeInstanceOf(StreamctlError);
     expect(caught).toMatchObject({
       code: "CONFIG_INVALID",
-      details: { file: "ci.yaml", condition: "ci.flag", reason: "unevaluable-value", found },
+      details: { file: "ci.yaml", condition: "eslint.flag", reason: "unevaluable-value", found },
     });
   });
 });
@@ -76,6 +75,7 @@ describe("evaluateCondition", () => {
 describe("compose: directive pass", () => {
   const payload = payloadOf({
     "base/npmrc": block,
+    "base/eslint-flag": "# streamctl:if eslint.flag\nx\n# streamctl:end eslint.flag\n",
     "base/ci.yaml": "jobs:\n  # streamctl:if ci.deploy\n  deploy: ${DEPLOY}\n  # streamctl:end ci.deploy\n  lint: true\n",
     "base/ci-main.yaml": "jobs:\n",
     "base/toggle.job": "  # streamctl:if ci.prisma\n  prisma: true\n  # streamctl:end ci.prisma\n  test: true\n",
@@ -129,9 +129,8 @@ describe("compose: directive pass", () => {
   });
 
   it("reports unevaluable values against the target path", async () => {
-    const file: ManagedFile = { path: ".npmrc", strategy: "full", source: "base/npmrc" };
-    const config: unknown = { ...cfg(), ci: { prisma: 3 } };
-    await expect(compose(file, payload, null, config as StreamctlConfig)).rejects.toMatchObject({
+    const file: ManagedFile = { path: ".npmrc", strategy: "full", source: "base/eslint-flag" };
+    await expect(compose(file, payload, null, cfg({ eslint: { flag: 3 } }))).rejects.toMatchObject({
       details: { file: ".npmrc", reason: "unevaluable-value", found: "number" },
     });
   });
