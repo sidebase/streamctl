@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { applyDirectives, scanDirectives } from "../src/directives";
 import { StreamctlError } from "../src/errors";
 
+function isDirectiveErrorDetails(value: unknown): value is DirectiveErrorDetails {
+  return typeof value === "object" && value !== null && "file" in value && typeof value.file === "string" && "line" in value && typeof value.line === "number" && "reason" in value && typeof value.reason === "string";
+}
+
 function scanError(text: string, path = "ci.yaml"): { message: string; details: DirectiveErrorDetails } {
   try {
     scanDirectives(text, path);
@@ -11,7 +15,10 @@ function scanError(text: string, path = "ci.yaml"): { message: string; details: 
       throw error;
     }
     expect(error.code).toBe("CONFIG_INVALID");
-    return { message: error.message, details: error.details as DirectiveErrorDetails };
+    if (!isDirectiveErrorDetails(error.details)) {
+      throw new Error(`unexpected directive error details: ${JSON.stringify(error.details)}`);
+    }
+    return { message: error.message, details: error.details };
   }
   throw new Error("expected scanDirectives to throw");
 }
