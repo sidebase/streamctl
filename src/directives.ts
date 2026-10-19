@@ -52,7 +52,6 @@ export interface DirectiveBlock {
 type Verb = "if" | "else" | "end";
 
 interface DirectiveLine {
-  line: number;
   indent: string;
   verb: Verb;
   rawCondition: string;
@@ -96,7 +95,7 @@ interface DirectiveParseError {
   extra: DetailExtras;
 }
 
-function parseDirective(lineNo: number, indent: string, rawRest: string, suffix: string): DirectiveLine | DirectiveParseError {
+function parseDirective(indent: string, rawRest: string, suffix: string): DirectiveLine | DirectiveParseError {
   let rest = rawRest.trimEnd();
   const hasSuffix = suffix === "" || rest.endsWith(suffix);
   if (suffix !== "" && hasSuffix) {
@@ -128,7 +127,7 @@ function parseDirective(lineNo: number, indent: string, rawRest: string, suffix:
   if (!CONDITION_RE.test(rawCondition)) {
     return { reason: "malformed-condition", message: `"${rawCondition}" is not a valid condition; use a dotted config path such as "features.prisma", optionally prefixed with "!".`, extra: { directive: verb, condition: rawCondition } };
   }
-  return { line: lineNo, indent, verb, rawCondition };
+  return { indent, verb, rawCondition };
 }
 
 /** YAML lint: no non-blank body line may sit left of (or diverge from) the directive indent. */
@@ -168,7 +167,7 @@ export function findDirectiveLine(text: string, path: string): number | undefine
   const { candidate, suffix } = buildCandidateMatcher(path);
   for (const [index, rawLine] of text.split("\n").entries()) {
     const match = candidate.exec(rawLine.replace(/\r$/, ""));
-    if (match !== null && !("reason" in parseDirective(index + 1, match[1] ?? "", match[2] ?? "", suffix))) {
+    if (match !== null && !("reason" in parseDirective(match[1] ?? "", match[2] ?? "", suffix))) {
       return index + 1;
     }
   }
@@ -192,7 +191,7 @@ export function scanDirectives(text: string, path: string): DirectiveBlock[] {
     if (format === "json" || format === "json5") {
       fail(path, lineNo, "structured-json", "template directives are not supported in JSON files.");
     }
-    const directive = parseDirective(lineNo, match[1] ?? "", match[2] ?? "", suffix);
+    const directive = parseDirective(match[1] ?? "", match[2] ?? "", suffix);
     if ("reason" in directive) {
       fail(path, lineNo, directive.reason, directive.message, directive.extra);
     }
