@@ -48,8 +48,9 @@ export type ConfigKeyType = (typeof CONFIG_KEY_TYPES)[number];
 
 /**
  * A `string[]` value is deduped + sorted, then joined per `join` (`space`, `lines` or
- * `comma`; `comma` requires `schemaVersion` {@link COMMA_JOIN_MIN_SCHEMA_VERSION}). Substitution repeats until the text stops changing (at most 10 passes,
- * so a self-referencing value fails); any leftover `${…}` then fails render.ts's
+ * `comma`; `comma` requires `schemaVersion` {@link COMMA_JOIN_MIN_SCHEMA_VERSION}).
+ * Substitution repeats until the text stops changing (at most 10 passes, so a
+ * self-referencing value fails); any leftover `${…}` then fails render.ts's
  * leftover-token check.
  *
  * `fromDependency` names an npm package whose pin in the consumer's package.json supplies
