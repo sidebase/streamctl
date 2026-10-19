@@ -303,6 +303,14 @@ describe("renderFile: indent-aware substitution", () => {
   it("lands $& and $1 verbatim", () => {
     expect(renderFile("  ${SCRIPT}\n", script("x $& y\n$1"), cfg(), {})).toBe("  x $& y\n  $1\n");
   });
+
+  it("indents two multiline tokens on one line independent of placeholder order", () => {
+    const a = { configPath: "ci.a", default: "a1\n    a2" };
+    const b = { configPath: "ci.b", default: "b1\nb2" };
+    const expected = "  a1\n      a2 b1\n  b2\n";
+    expect(renderFile("  ${A} ${B}\n", { placeholders: { A: a, B: b } }, cfg(), {})).toBe(expected);
+    expect(renderFile("  ${A} ${B}\n", { placeholders: { B: b, A: a } }, cfg(), {})).toBe(expected);
+  });
 });
 
 describe("renderFile: unreachable placeholders", () => {

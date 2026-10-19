@@ -244,27 +244,23 @@ export function renderFile(
 
   const passthrough = new Set(renderDef.passthrough ?? []);
 
-  // Per key, then per line, so continuation lines of a multiline value get the leading
-  // whitespace of the line holding the token (not the token's column); empty ones stay
-  // empty. Re-splitting per key keeps nested tokens independent of declaration order.
-  // Callback form: a plain replacement string would honor `$&`/`$1` patterns in the
-  // value; config values are data and must land verbatim.
-  const substitutePass = (text: string): string => {
-    let next = text;
-    for (const [key, value] of values) {
-      const token = `\${${key}}`;
-      if (!next.includes(token)) {
-        continue;
-      }
-      const parts = value.split("\n");
-      next = next.split("\n").map((line) => {
-        const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
-        const indented = parts.map((part, index) => index === 0 || part === "" ? part : indent + part).join("\n");
-        return line.replaceAll(token, () => indented);
-      }).join("\n");
-    }
-    return next;
-  };
+  // All tokens of a line are replaced in one go against that line's leading whitespace (not
+  // the token's column), so continuation lines of a multiline value line up and empty ones
+  // stay empty. Inserted values are not rescanned within the pass: nested tokens resolve on
+  // the next pass against the line they landed on, which keeps the output independent of
+  // placeholder declaration order. Callback form: a plain replacement string would honor
+  // `$&`/`$1` patterns in the value; config values are data and must land verbatim.
+  const substitutePass = (text: string): string =>
+    text.split("\n").map((line) => {
+      const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
+      return line.replace(LEFTOVER_TOKEN_RE, (token: string, name: string) => {
+        const value = values.get(name);
+        if (value === undefined) {
+          return token;
+        }
+        return value.split("\n").map((part, index) => index === 0 || part === "" ? part : indent + part).join("\n");
+      });
+    }).join("\n");
 
   for (let pass = 1; ; pass++) {
     const next = substitutePass(output);
