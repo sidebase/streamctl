@@ -69,8 +69,10 @@ function escapeRegExp(value: string): string {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function fail(path: string, line: number, reason: DirectiveReason, message: string, extra: Partial<DirectiveErrorDetails> = {}): never {
-  const details: DirectiveErrorDetails = { file: path, line, reason, ...extra };
+type DetailExtras = Omit<Partial<DirectiveErrorDetails>, "file" | "line" | "reason">;
+
+function fail(path: string, line: number, reason: DirectiveReason, message: string, extra: DetailExtras = {}): never {
+  const details: DirectiveErrorDetails = { ...extra, file: path, line, reason };
   throw new StreamctlError("CONFIG_INVALID", `${path}:${line}: ${message}`, details);
 }
 
@@ -96,9 +98,12 @@ function parseDirective(path: string, lineNo: number, indent: string, rawRest: s
   const words = (verbEnd === -1 ? "" : rest.slice(verbEnd)).split(/\s+/).filter(word => word !== "");
 
   if (!isVerb(verb)) {
-    const hint = RESERVED_VERBS.has(verb)
-      ? ` "streamctl:${verb}" is reserved for a future version.`
-      : " Expected streamctl:if, streamctl:else or streamctl:end.";
+    let hint = " Expected streamctl:if, streamctl:else or streamctl:end.";
+    if (RESERVED_VERBS.has(verb)) {
+      hint = ` "streamctl:${verb}" is reserved for a future version.`;
+    } else if (verb === "" && words[0] !== undefined && isVerb(words[0])) {
+      hint = ` No space is allowed after "streamctl:"; write "streamctl:${words[0]}".`;
+    }
     fail(path, lineNo, "unknown-directive", `unknown directive "streamctl:${verb}".${hint}`, { directive: verb });
   }
   if (!hasSuffix) {
@@ -201,4 +206,33 @@ export function scanDirectives(text: string, path: string): DirectiveBlock[] {
     fail(path, open.line, "unclosed-if", `"streamctl:if ${open.raw}" is never closed with "streamctl:end ${open.raw}".`, { directive: "if", condition: open.raw, openedAt: open.line });
   }
   return blocks;
+}
+
+/**
+ * Drop every directive line, the `if` branch of false blocks and the `else` branch
+ * of true blocks. Always rescans; other lines are kept byte for byte.
+ */
+export function applyDirectives(text: string, path: string, evaluate: (conditionPath: string) => boolean): string {
+  const blocks = scanDirectives(text, path);
+  if (blocks.length === 0) {
+    return text;
+  }
+  // 0-based indices; block line numbers are 1-based.
+  const drop = new Set<number>();
+  for (const block of blocks) {
+    const kept = evaluate(block.condition) !== block.negated;
+    const branchEnd = block.elseLine ?? block.endLine;
+    const [from, to] = kept
+      ? [block.elseLine ?? block.endLine, block.endLine]
+      : [block.ifLine, branchEnd];
+    drop.add(block.ifLine - 1);
+    drop.add(block.endLine - 1);
+    if (block.elseLine !== undefined) {
+      drop.add(block.elseLine - 1);
+    }
+    for (let lineNo = from + 1; lineNo < to; lineNo++) {
+      drop.add(lineNo - 1);
+    }
+  }
+  return text.split("\n").filter((_, index) => !drop.has(index)).join("\n");
 }

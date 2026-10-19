@@ -1,6 +1,6 @@
 import type { DirectiveErrorDetails } from "../src/directives";
-import { describe, expect, it } from "vitest";
-import { scanDirectives } from "../src/directives";
+import { describe, expect, it, vi } from "vitest";
+import { applyDirectives, scanDirectives } from "../src/directives";
 import { StreamctlError } from "../src/errors";
 
 function scanError(text: string, path = "ci.yaml"): { message: string; details: DirectiveErrorDetails } {
@@ -96,6 +96,12 @@ describe("scanDirectives: errors", () => {
     expect(details).toMatchObject({ file: "ci.yaml", line: 1, reason: "unknown-directive" });
     expect(message).toMatch(/^ci\.yaml:1: /);
     expect(message).not.toContain("reserved");
+  });
+
+  it("hints when a space follows streamctl:", () => {
+    const { details, message } = scanError("# streamctl: if x\n");
+    expect(details).toMatchObject({ reason: "unknown-directive", directive: "" });
+    expect(message).toContain("No space is allowed after");
   });
 
   it("hints at reserved verbs", () => {
@@ -194,5 +200,85 @@ describe("scanDirectives: errors", () => {
 
   it("does not apply the YAML body rule to other files", () => {
     expect(scanDirectives("  # streamctl:if a\nx\n  # streamctl:end a\n", ".npmrc")).toHaveLength(1);
+  });
+});
+
+describe("applyDirectives", () => {
+  const always = (value: boolean) => () => value;
+  const ifElse = "a\n# streamctl:if x\nyes\n# streamctl:else x\nno\n# streamctl:end x\nz\n";
+
+  it("returns text without directives unchanged", () => {
+    expect(applyDirectives("a\nb", ".npmrc", always(true))).toBe("a\nb");
+  });
+
+  it("strips directive lines and keeps the body when true", () => {
+    expect(applyDirectives("a\n# streamctl:if x\nb\n# streamctl:end x\nc\n", ".npmrc", always(true))).toBe("a\nb\nc\n");
+  });
+
+  it("removes the body when false", () => {
+    expect(applyDirectives("a\n# streamctl:if x\nb\n# streamctl:end x\nc\n", ".npmrc", always(false))).toBe("a\nc\n");
+  });
+
+  it("keeps the if branch of an else block when true", () => {
+    expect(applyDirectives(ifElse, ".npmrc", always(true))).toBe("a\nyes\nz\n");
+  });
+
+  it("keeps the else branch when false", () => {
+    expect(applyDirectives(ifElse, ".npmrc", always(false))).toBe("a\nno\nz\n");
+  });
+
+  it("inverts negated conditions", () => {
+    const text = "# streamctl:if !x\nb\n# streamctl:else !x\nc\n# streamctl:end !x\n";
+    expect(applyDirectives(text, ".npmrc", always(true))).toBe("c\n");
+    expect(applyDirectives(text, ".npmrc", always(false))).toBe("b\n");
+  });
+
+  it("allows empty branches", () => {
+    const text = "a\n# streamctl:if x\n# streamctl:else x\n# streamctl:end x\n";
+    expect(applyDirectives(text, ".npmrc", always(true))).toBe("a\n");
+    expect(applyDirectives(text, ".npmrc", always(false))).toBe("a\n");
+  });
+
+  it("preserves trailing newline state", () => {
+    expect(applyDirectives("a\n# streamctl:if x\nb\n# streamctl:end x", ".npmrc", always(true))).toBe("a\nb");
+    expect(applyDirectives("# streamctl:if x\nb\n# streamctl:end x\n", ".npmrc", always(false))).toBe("");
+  });
+
+  it("preserves \\r on CRLF text", () => {
+    expect(applyDirectives("a\r\n# streamctl:if x\r\nb\r\n# streamctl:end x\r\nc\r\n", ".npmrc", always(true))).toBe("a\r\nb\r\nc\r\n");
+  });
+
+  it("handles HTML and // syntax", () => {
+    expect(applyDirectives("<!-- streamctl:if x -->\nb\n<!-- streamctl:end x -->\nc", "README.md", always(false))).toBe("c");
+    expect(applyDirectives("// streamctl:if x\nb\n// streamctl:end x\nc", "a.ts", always(true))).toBe("b\nc");
+  });
+
+  it("is idempotent", () => {
+    const once = applyDirectives(ifElse, ".npmrc", always(true));
+    expect(applyDirectives(once, ".npmrc", always(false))).toBe(once);
+  });
+
+  it("calls evaluate once per block with the bare condition", () => {
+    const evaluate = vi.fn((path: string) => path === "a");
+    const text = "# streamctl:if !a\nx\n# streamctl:end !a\n# streamctl:if b.c\ny\n# streamctl:end b.c\n";
+    expect(applyDirectives(text, ".npmrc", evaluate)).toBe("");
+    expect(evaluate.mock.calls).toEqual([["a"], ["b.c"]]);
+  });
+
+  it("propagates scan errors", () => {
+    expect(() => applyDirectives("# streamctl:if x\n", ".npmrc", always(true))).toThrow(StreamctlError);
+  });
+
+  it("propagates evaluate errors unchanged", () => {
+    const failure = new Error("boom");
+    let caught: unknown;
+    try {
+      applyDirectives("# streamctl:if x\n# streamctl:end x\n", ".npmrc", () => {
+        throw failure;
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBe(failure);
   });
 });
