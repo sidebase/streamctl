@@ -33,7 +33,10 @@ export interface DirectiveErrorDetails {
   condition?: string;
   expected?: string;
   openedAt?: number;
-  found?: string;
+  /** Offending value: a type name (`unevaluable-value`) or the declared `schemaVersion` (`schema-version`). */
+  found?: string | number;
+  /** Minimum `schemaVersion` (`schema-version`). */
+  required?: number;
 }
 
 export interface DirectiveBlock {

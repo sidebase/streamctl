@@ -1,6 +1,6 @@
 import type { ZodError } from "zod";
 import type { ManagedFile as EngineManagedFile } from "../config/types";
-import type { DirectiveBlock } from "../directives";
+import type { DirectiveBlock, DirectiveErrorDetails } from "../directives";
 import type { ConfigKeyType, ManagedFile as ManifestManagedFile, PayloadManifest, PresetManifest, RenderDef } from "../manifest/schema";
 import type { PayloadHandle } from "../payload/resolve";
 import { scanDirectives } from "../directives";
@@ -216,14 +216,14 @@ async function validateDirectives(
       throw new StreamctlError(
         "CONFIG_INVALID",
         `${file}:${first.ifLine}: uses template directives, which requires schemaVersion ${DIRECTIVES_MIN_SCHEMA_VERSION}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${schemaVersion}.`,
-        { file, line: first.ifLine, reason: "schema-version", found: schemaVersion, required: DIRECTIVES_MIN_SCHEMA_VERSION },
+        { file, line: first.ifLine, reason: "schema-version", found: schemaVersion, required: DIRECTIVES_MIN_SCHEMA_VERSION } satisfies DirectiveErrorDetails,
       );
     }
     if (target.strategy === "merge") {
       throw new StreamctlError(
         "CONFIG_INVALID",
         `${file}:${first.ifLine}: template directives are not supported in merge-strategy files.`,
-        { file, line: first.ifLine, reason: "merge-strategy" },
+        { file, line: first.ifLine, reason: "merge-strategy" } satisfies DirectiveErrorDetails,
       );
     }
     for (const block of blocks) {
@@ -232,7 +232,7 @@ async function validateDirectives(
         throw new StreamctlError(
           "CONFIG_INVALID",
           `${file}:${block.ifLine}: condition "${block.condition}" names an object config key; use one of its fields instead.`,
-          { ...details, reason: "object-condition" },
+          { ...details, reason: "object-condition" } satisfies DirectiveErrorDetails,
         );
       }
       configPathRefs.push({
