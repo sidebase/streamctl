@@ -79,6 +79,7 @@ describe("compose: directive pass", () => {
     "base/ci.yaml": "jobs:\n  # streamctl:if ci.deploy\n  deploy: ${DEPLOY}\n  # streamctl:end ci.deploy\n  lint: true\n",
     "base/ci-main.yaml": "jobs:\n",
     "base/toggle.job": "  # streamctl:if ci.prisma\n  prisma: true\n  # streamctl:end ci.prisma\n  test: true\n",
+    "base/flag.job": "  # streamctl:if eslint.flag\n  x: true\n  # streamctl:end eslint.flag\n",
     "base/env.job": "  deploy-${ITEM}:\n    # streamctl:if !ci.prisma\n    plain: true\n    # streamctl:end !ci.prisma\n",
   });
 
@@ -144,6 +145,18 @@ describe("compose: directive pass", () => {
     const file: ManagedFile = { path: ".npmrc", strategy: "full", source: "base/eslint-flag" };
     await expect(compose(file, payload, null, cfg({ eslint: { flag: 3 } }))).rejects.toMatchObject({
       details: { file: ".npmrc", reason: "unevaluable-value", found: "number" },
+    });
+  });
+
+  it("reports unevaluable values in a fragment against the target path", async () => {
+    const file: ManagedFile = {
+      path: ".github/workflows/ci.yaml",
+      strategy: "full",
+      source: "base/ci-main.yaml",
+      renderDef: { fragments: [{ toggle: "ci.test", source: "base/flag.job" }] },
+    };
+    await expect(compose(file, payload, null, cfg({ ci: { test: true }, eslint: { flag: 3 } }))).rejects.toMatchObject({
+      details: { file: ".github/workflows/ci.yaml", reason: "unevaluable-value", found: "number" },
     });
   });
 });

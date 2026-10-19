@@ -50,7 +50,7 @@ function finalizeComposed(
  */
 async function renderManagedTemplate(file: ManagedFile, payload: PayloadHandle, config: StreamctlConfig | undefined, deps: Record<string, string>): Promise<string> {
   const resolve = (text: string, path: string): string =>
-    file.skipDirectives === true ? text : applyDirectives(text, path, condition => evaluateCondition(config, condition, path));
+    file.skipDirectives === true ? text : applyDirectives(text, path, condition => evaluateCondition(config, condition, file.path));
   const raw = resolve(await payload.read(file.source), file.path);
   if (file.renderDef === undefined) {
     return raw;
