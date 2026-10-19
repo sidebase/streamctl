@@ -249,6 +249,35 @@ describe("renderFile: nested placeholder tokens", () => {
   });
 });
 
+describe("renderFile: indent-aware substitution", () => {
+  const script = (value: string): RenderDef => ({ placeholders: { SCRIPT: { configPath: "ci.script", default: value } } });
+
+  it("indents continuation lines like the token line", () => {
+    expect(renderFile("run: |\n    ${SCRIPT}\n", script("a\nb\nc"), cfg(), {})).toBe("run: |\n    a\n    b\n    c\n");
+  });
+
+  it("leaves empty continuation lines empty", () => {
+    expect(renderFile("  ${SCRIPT}\n", script("a\n\nb"), cfg(), {})).toBe("  a\n\n  b\n");
+  });
+
+  it("keeps a column-0 multiline value as-is", () => {
+    expect(renderFile("${SCRIPT}\nend\n", script("a\n  b\nc"), cfg(), {})).toBe("a\n  b\nc\nend\n");
+  });
+
+  it("leaves single-line values unchanged", () => {
+    expect(renderFile("  key: ${SCRIPT}\n", script("value"), cfg(), {})).toBe("  key: value\n");
+  });
+
+  it("uses the same indent for two tokens on one line", () => {
+    const def: RenderDef = { placeholders: { A: { configPath: "ci.a", default: "a1\na2" }, B: { configPath: "ci.b", default: "b1\nb2" } } };
+    expect(renderFile("  ${A} ${B}\n", def, cfg(), {})).toBe("  a1\n  a2 b1\n  b2\n");
+  });
+
+  it("lands $& and $1 verbatim", () => {
+    expect(renderFile("  ${SCRIPT}\n", script("x $& y\n$1"), cfg(), {})).toBe("  x $& y\n  $1\n");
+  });
+});
+
 describe("renderFile: omitLineIfEmpty", () => {
   const def = (omitLineIfEmpty?: boolean): RenderDef => ({ placeholders: { HOOK: { configPath: "docker.hook", default: "", omitLineIfEmpty } } });
   const source = "FROM a\n${HOOK}\n\nCOPY b\n";

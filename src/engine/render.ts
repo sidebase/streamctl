@@ -225,15 +225,18 @@ export function renderFile(
 
   const passthrough = new Set(renderDef.passthrough ?? []);
 
-  // Callback form: a plain replacement string would honor `$&`/`$1` patterns in the value.
-  // Config values are data and must land verbatim.
-  const substitutePass = (text: string): string => {
-    let next = text;
+  // Per line, so continuation lines of a multiline value get the token line's leading
+  // whitespace (empty ones stay empty). Callback form: a plain replacement string would
+  // honor `$&`/`$1` patterns in the value; config values are data and must land verbatim.
+  const substitutePass = (text: string): string => text.split("\n").map((line) => {
+    const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
+    let next = line;
     for (const [key, value] of values) {
-      next = next.replaceAll(`\${${key}}`, () => value);
+      const indented = indent === "" ? value : value.split("\n").map((part, index) => index === 0 || part === "" ? part : indent + part).join("\n");
+      next = next.replaceAll(`\${${key}}`, () => indented);
     }
     return next;
-  };
+  }).join("\n");
 
   for (let pass = 1; ; pass++) {
     const next = substitutePass(output);
