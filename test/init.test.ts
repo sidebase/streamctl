@@ -84,6 +84,8 @@ function baseOpts(overrides: Partial<RunInitOptions> = {}): RunInitOptions {
 }
 
 beforeEach(async () => {
+  // Silences init's warnings (e.g. the config-load fallback); tests that read them use captureStderr.
+  vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   repo = await mkdtemp(join(tmpdir(), "streamctl-init-repo-"));
   configPkg = await mkdtemp(join(tmpdir(), "streamctl-init-pkg-"));
   await makeConfigPackage();
@@ -195,7 +197,8 @@ describe("runInit", () => {
 
     const warnings = stderr.join("").split("\n").filter(line => line.includes("could not load the scaffolded"));
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("template exploded");
+    expect(warnings[0]).toContain("could not load the scaffolded streamctl.config.ts; running the first sync");
+    expect(warnings[0]).toMatch(/Reason: .*template exploded/);
     expect(result.sync?.written).toContain(".editorconfig");
   });
 

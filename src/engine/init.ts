@@ -448,8 +448,8 @@ export async function runInit(opts: RunInitOptions): Promise<InitResult> {
   try {
     config = (await loadStreamctlConfig(cwd, { logger })).config;
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    logger.warn(`could not load the scaffolded ${CONFIG_FILE} (${reason}); running the first sync with package, base, version and profile only.`);
+    const reason = (error instanceof Error ? error.message : String(error)).split("\n")[0];
+    logger.warn(`could not load the scaffolded ${CONFIG_FILE}.ts; running the first sync with package, base, version and profile only. Reason: ${reason}`);
     config = { package: opts.package, base, version, profile };
   }
   const payload = await getPayload();
