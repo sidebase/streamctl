@@ -5,7 +5,7 @@ import type { ConfigKeyType, ManagedFile as ManifestManagedFile, PayloadManifest
 import type { PayloadHandle } from "../payload/resolve";
 import { findDirectiveLine, scanDirectives } from "../directives";
 import { StreamctlError } from "../errors";
-import { COMMA_JOIN_MIN_SCHEMA_VERSION, DIRECTIVES_MIN_SCHEMA_VERSION, FROM_DEPENDENCY_MIN_SCHEMA_VERSION, OMIT_LINE_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
+import { COMMA_JOIN_MIN_SCHEMA_VERSION, CONFIG_KEY_DEFAULTS_MIN_SCHEMA_VERSION, DIRECTIVES_MIN_SCHEMA_VERSION, FROM_DEPENDENCY_MIN_SCHEMA_VERSION, OMIT_LINE_MIN_SCHEMA_VERSION, payloadManifestSchema, presetManifestSchema, SUPPORTED_SCHEMA_VERSION_LIST, SUPPORTED_SCHEMA_VERSIONS, zodToIssues } from "../manifest/schema";
 
 const PAYLOAD_MANIFEST = "presets/manifest.json";
 
@@ -140,6 +140,17 @@ export async function loadPresetManifest(payload: PayloadHandle, name: string, m
       }
     }
   }
+  if (manifest.schemaVersion < CONFIG_KEY_DEFAULTS_MIN_SCHEMA_VERSION) {
+    for (const [key, entry] of Object.entries(preset.configKeys ?? {})) {
+      if (typeof entry !== "string") {
+        throw new StreamctlError(
+          "CONFIG_INVALID",
+          `${file} configKeys "${key}" has a default, which requires schemaVersion ${CONFIG_KEY_DEFAULTS_MIN_SCHEMA_VERSION}, but ${PAYLOAD_MANIFEST} declares schemaVersion ${manifest.schemaVersion}.`,
+          { file, preset: name, configKey: key, found: manifest.schemaVersion, required: CONFIG_KEY_DEFAULTS_MIN_SCHEMA_VERSION },
+        );
+      }
+    }
+  }
   return preset;
 }
 
@@ -258,7 +269,7 @@ export async function resolvePresetChain(
   payload: PayloadHandle,
   base: string,
   profile: string,
-): Promise<{ files: EngineManagedFile[]; baseline: Record<string, string>; configKeys: Record<string, ConfigKeyType> }> {
+): Promise<{ files: EngineManagedFile[]; baseline: Record<string, string>; configKeys: Record<string, ConfigKeyType>; configDefaults: Record<string, unknown> }> {
   const manifest = await loadPayloadManifest(payload);
 
   if (!manifest.presets.includes(base)) {
@@ -287,6 +298,7 @@ export async function resolvePresetChain(
   const renders = new Map<string, RenderDef>();
   const renderKeyByPath = new Map<string, string>();
   const configKeys: Record<string, ConfigKeyType> = {};
+  const configDefaults: Record<string, unknown> = {};
   const baseline: Record<string, string> = {};
   const renderRefs: { file: string; render: string }[] = [];
   const configPathRefs: ConfigPathRef[] = [];
@@ -311,7 +323,16 @@ export async function resolvePresetChain(
         configPathRefs.push({ where: `renders.${key} fragment`, path: "toggle" in fragment ? fragment.toggle : fragment.forEach });
       }
     }
-    Object.assign(configKeys, preset.configKeys ?? {}); // child overrides parent (parents visited first)
+    // Child overrides parent (parents visited first); redeclaring without a default drops the parent's.
+    for (const [key, entry] of Object.entries(preset.configKeys ?? {})) {
+      delete configDefaults[key];
+      if (typeof entry === "string") {
+        configKeys[key] = entry;
+      } else {
+        configKeys[key] = entry.type;
+        configDefaults[key] = entry.default;
+      }
+    }
     for (const file of preset.files) {
       byPath.set(file.path, toEngineFile(file));
       // Track the render key per path so a child override that drops render clears
@@ -392,5 +413,5 @@ export async function resolvePresetChain(
     }
   }
 
-  return { files, baseline, configKeys };
+  return { files, baseline, configKeys, configDefaults };
 }

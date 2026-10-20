@@ -42,9 +42,42 @@ export const DIRECTIVES_MIN_SCHEMA_VERSION = 5;
 /** Lowest `schemaVersion` a payload may declare while using placeholder `join: "comma"`. */
 export const COMMA_JOIN_MIN_SCHEMA_VERSION = 5;
 
+/** Lowest `schemaVersion` a payload may declare while giving a `configKeys` entry a `default`. */
+export const CONFIG_KEY_DEFAULTS_MIN_SCHEMA_VERSION = 5;
+
 /** The CLI checks shape only; semantics stay payload-owned. `"object"` is a presence + `typeof` check with no deep validation. */
 export const CONFIG_KEY_TYPES = ["boolean", "string", "string[]", "object"] as const;
 export type ConfigKeyType = (typeof CONFIG_KEY_TYPES)[number];
+
+/** True when `value` satisfies the declared {@link ConfigKeyType} (object = shape-only). */
+export function matchesConfigKeyType(value: unknown, type: ConfigKeyType): boolean {
+  switch (type) {
+    case "boolean":
+      return typeof value === "boolean";
+    case "string":
+      return typeof value === "string";
+    case "string[]":
+      return Array.isArray(value) && value.every(entry => typeof entry === "string");
+    case "object":
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+}
+
+/**
+ * A `configKeys` entry: the bare type, or `{ type, default }`. The default fills the
+ * value when the consumer config leaves it unset; `object` keys take none.
+ */
+export const configKeySchema = z.union([
+  z.enum(CONFIG_KEY_TYPES),
+  z.strictObject({ type: z.enum(CONFIG_KEY_TYPES), default: z.unknown() }).superRefine((entry, ctx) => {
+    if (entry.type === "object") {
+      ctx.addIssue({ code: "custom", path: ["default"], message: "object keys cannot have a default" });
+    } else if (!matchesConfigKeyType(entry.default, entry.type)) {
+      ctx.addIssue({ code: "custom", path: ["default"], message: `must be a ${entry.type}` });
+    }
+  }),
+]);
+export type ConfigKeyEntry = z.infer<typeof configKeySchema>;
 
 /**
  * A `string[]` value is deduped + sorted, then joined per `join` (`space`, `lines` or
@@ -189,7 +222,7 @@ export const presetManifestSchema = z.strictObject({
   // "Invalid key in record" message would hide the actual pattern.
   versionProfiles: z.record(z.string().min(1), z.record(z.string().min(1), z.string())).optional(),
   renders: z.record(z.string().min(1), renderDefSchema).optional(),
-  configKeys: z.record(z.string().min(1), z.enum(CONFIG_KEY_TYPES)).optional(),
+  configKeys: z.record(z.string().min(1), configKeySchema).optional(),
 }).superRefine((preset, ctx) => {
   if (preset.files.length === 0 && (preset.extends === undefined || preset.extends.length === 0)) {
     ctx.addIssue({ code: "custom", path: ["files"], message: "must be non-empty unless the preset extends a parent" });
