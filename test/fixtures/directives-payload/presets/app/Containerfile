@@ -1,0 +1,7 @@
+FROM docker.io/library/node:20-slim
+
+# streamctl:if ci.containerDebug
+RUN apt-get update && apt-get install -y --no-install-recommends curl
+# streamctl:end ci.containerDebug
+COPY . /app
+WORKDIR /app

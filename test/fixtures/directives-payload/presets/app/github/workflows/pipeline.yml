@@ -1,0 +1,19 @@
+name: pipeline
+on:
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # streamctl:if ci.cache
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+      # streamctl:else ci.cache
+      - run: echo "cache disabled"
+      # streamctl:end ci.cache
+      - run: acme build
+      # streamctl:if ci.deploy
+      - run: acme deploy --target ${DEPLOY_TARGET}
+      # streamctl:end ci.deploy

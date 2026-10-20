@@ -9,6 +9,10 @@ function payloadOf(files: Record<string, unknown>): PayloadHandle {
     version: "2.0.0",
     async read(source) {
       if (!(source in files)) {
+        // Templates are scanned for directives at chain time; most cases don't need content.
+        if (source !== "manifest.json" && !source.endsWith("/preset.json")) {
+          return "";
+        }
         throw new Error(`missing fixture source: ${source}`);
       }
       const value = files[source];
@@ -87,19 +91,25 @@ describe("schemaVersion contract", () => {
     expect(manifest.schemaVersion).toBe(3);
   });
 
+  it("accepts a v5 payload", async () => {
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const manifest = await loadPayloadManifest(payload);
+    expect(manifest.schemaVersion).toBe(5);
+  });
+
   // Checked ahead of zod so the user sees both version numbers instead of a refinement issue.
   it("names the payload's version and ours when they disagree", async () => {
-    const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 6, presets: ["base"], profiles: [], defaultBase: "base" } });
     const error = await caught(loadPayloadManifest(payload));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
-    expect(error.message).toContain("schemaVersion 5");
-    expect(error.message).toContain("schemaVersion 2, 3, 4");
+    expect(error.message).toContain("schemaVersion 6");
+    expect(error.message).toContain("schemaVersion 2, 3, 4, 5");
     expect(error.message).toContain("Upgrade the CLI or the payload");
-    expect(error.details).toMatchObject({ found: 5, supported: [2, 3, 4] });
+    expect(error.details).toMatchObject({ found: 6, supported: [2, 3, 4, 5] });
   });
 
   it("surfaces through resolvePresetChain too", async () => {
-    const payload = payloadOf({ "manifest.json": { schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" } });
+    const payload = payloadOf({ "manifest.json": { schemaVersion: 6, presets: ["base"], profiles: [], defaultBase: "base" } });
     const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("SCHEMA_UNSUPPORTED");
   });
@@ -172,6 +182,32 @@ describe("omitLineIfEmpty feature gate", () => {
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.message).toContain("\"HOOK\" uses omitLineIfEmpty, which requires schemaVersion 4");
     expect(error.details).toMatchObject({ file: "presets/base/preset.json", render: "dockerfile", placeholder: "HOOK", found: 3, required: 4 });
+  });
+});
+
+describe("join: comma feature gate", () => {
+  function withCommaJoin(schemaVersion: number): PayloadHandle {
+    return payloadOf({
+      "manifest.json": { schemaVersion, presets: ["base"], profiles: [], defaultBase: "base" },
+      "base/preset.json": {
+        name: "base",
+        files: [{ path: "Dockerfile", strategy: "full", source: "Dockerfile", render: "dockerfile" }],
+        renders: { dockerfile: { placeholders: { BUILT: { configPath: "pnpm.onlyBuiltDependencies", default: "", join: "comma" } } } },
+        configKeys: { "pnpm.onlyBuiltDependencies": "string[]" },
+      },
+    });
+  }
+
+  it("lets a v5 payload declare it", async () => {
+    const { files } = await resolvePresetChain(withCommaJoin(5), "base", "nuxt-4");
+    expect(files.find(f => f.path === "Dockerfile")?.renderDef?.placeholders?.BUILT?.join).toBe("comma");
+  });
+
+  it("refuses it under a v4 payload, naming the placeholder and the version it needs", async () => {
+    const error = await caught(resolvePresetChain(withCommaJoin(4), "base", "nuxt-4"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toBe("presets/base/preset.json renders.dockerfile placeholder \"BUILT\" uses join: \"comma\", which requires schemaVersion 5, but presets/manifest.json declares schemaVersion 4.");
+    expect(error.details).toMatchObject({ file: "presets/base/preset.json", render: "dockerfile", placeholder: "BUILT", found: 4, required: 5 });
   });
 });
 
@@ -420,5 +456,126 @@ describe("manifest is required", () => {
     const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
     expect(error.code).toBe("PAYLOAD_INVALID");
     expect(error.message).toContain("has no presets/manifest.json");
+  });
+});
+
+describe("chain-time directive validation", () => {
+  const block = "# streamctl:if ci.deploy\ndeploy: true\n# streamctl:end ci.deploy\n";
+
+  function directivePayload(over: { schemaVersion?: number; files?: unknown[]; configKeys?: Record<string, string>; sources?: Record<string, string>; renders?: Record<string, unknown> } = {}): PayloadHandle {
+    return payloadOf({
+      "manifest.json": { schemaVersion: over.schemaVersion ?? 5, presets: ["base"], profiles: [], defaultBase: "base" },
+      "base/preset.json": {
+        name: "base",
+        files: over.files ?? [{ path: ".github/workflows/ci.yaml", strategy: "full", source: "base/ci.yaml" }],
+        configKeys: over.configKeys ?? { "ci.deploy": "boolean" },
+        ...(over.renders === undefined ? {} : { renders: over.renders }),
+      },
+      "base/ci.yaml": block,
+      ...over.sources,
+    });
+  }
+
+  it("accepts declared conditions on a v5 payload", async () => {
+    const { files } = await resolvePresetChain(directivePayload(), "base", "nuxt-4");
+    expect(files.map(f => f.path)).toEqual([".github/workflows/ci.yaml"]);
+  });
+
+  it("reads each source once", async () => {
+    const payload = directivePayload({
+      files: [
+        { path: "a.yaml", strategy: "full", source: "base/ci.yaml", render: "r" },
+        { path: "b.yaml", strategy: "full", source: "base/ci.yaml", render: "r" },
+      ],
+      renders: { r: { fragments: [{ toggle: "ci.deploy", source: "base/frag.yml" }] } },
+      sources: { "base/frag.yml": "" },
+    });
+    const reads: string[] = [];
+    const counting: PayloadHandle = { ...payload, read: async (source) => {
+      reads.push(source);
+      return payload.read(source);
+    } };
+    await resolvePresetChain(counting, "base", "nuxt-4");
+    expect(reads.filter(source => source === "base/ci.yaml")).toHaveLength(1);
+    expect(reads.filter(source => source === "base/frag.yml")).toHaveLength(1);
+  });
+
+  it("rejects directives on a schema-4 payload", async () => {
+    const error = await caught(resolvePresetChain(directivePayload({ schemaVersion: 4 }), "base", "nuxt-4"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain("requires schemaVersion 5, but presets/manifest.json declares schemaVersion 4");
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "schema-version" });
+  });
+
+  it("treats streamctl: prose as content on a schema-4 payload and marks files to skip directives", async () => {
+    const prose = "# streamctl: managed file\nname: ci\n";
+    const { files } = await resolvePresetChain(directivePayload({ schemaVersion: 4, sources: { "base/ci.yaml": prose } }), "base", "nuxt-4");
+    expect(files[0]).toMatchObject({ path: ".github/workflows/ci.yaml", skipDirectives: true });
+  });
+
+  it("still rejects a well-formed directive below prose on a schema-4 payload", async () => {
+    const payload = directivePayload({ schemaVersion: 4, sources: { "base/ci.yaml": `# streamctl: managed file\n${block}` } });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 2, reason: "schema-version" });
+  });
+
+  it("leaves skipDirectives unset on a schema-5 payload", async () => {
+    const { files } = await resolvePresetChain(directivePayload(), "base", "nuxt-4");
+    expect(files[0]?.skipDirectives).toBeUndefined();
+  });
+
+  it("rejects streamctl: prose on a schema-5 payload", async () => {
+    const error = await caught(resolvePresetChain(directivePayload({ sources: { "base/ci.yaml": "# streamctl: managed file\n" } }), "base", "nuxt-4"));
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "unknown-directive" });
+  });
+
+  it("rejects an undeclared condition, naming file and line", async () => {
+    const error = await caught(resolvePresetChain(directivePayload({ configKeys: { "ci.lint": "boolean" } }), "base", "nuxt-4"));
+    expect(error.message).toContain("template \"presets/base/ci.yaml\" line 1 references config path \"ci.deploy\", which no preset declares in configKeys");
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "undeclared-condition", path: "ci.deploy" });
+  });
+
+  it("rejects directives in a merge-strategy template", async () => {
+    const payload = directivePayload({
+      files: [{ path: ".vscode/settings.txt", strategy: "merge", source: "base/settings" }],
+      sources: { "base/settings": block },
+    });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.details).toMatchObject({ file: "presets/base/settings", line: 1, reason: "merge-strategy" });
+  });
+
+  it("rejects a condition naming an object key exactly", async () => {
+    const payload = directivePayload({ sources: { "base/ci.yaml": "# streamctl:if ci\n# streamctl:end ci\n" }, configKeys: { ci: "object" } });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 1, reason: "object-condition", condition: "ci" });
+  });
+
+  it("accepts a condition descending into an object key", async () => {
+    await expect(resolvePresetChain(directivePayload({ configKeys: { ci: "object" } }), "base", "nuxt-4")).resolves.toBeDefined();
+  });
+
+  it("relocates parser errors to the payload-relative source", async () => {
+    const payload = directivePayload({ sources: { "base/ci.yaml": "x\n# streamctl:if ci.deploy\n" } });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.message).toMatch(/^presets\/base\/ci\.yaml:2: /);
+    expect(error.details).toMatchObject({ file: "presets/base/ci.yaml", line: 2, reason: "unclosed-if", openedAt: 2 });
+  });
+
+  it("scans fragments with the fragment source as path", async () => {
+    const payload = directivePayload({
+      files: [{ path: "ci.yaml", strategy: "full", source: "base/ci.yaml", render: "r" }],
+      renders: { r: { fragments: [{ toggle: "ci.deploy", source: "base/frag.yml" }] } },
+      sources: { "base/frag.yml": "# streamctl:if ci.missing\n# streamctl:end ci.missing\n" },
+    });
+    const error = await caught(resolvePresetChain(payload, "base", "nuxt-4"));
+    expect(error.message).toContain("fragment \"presets/base/frag.yml\" line 1");
+  });
+
+  it("scans files that are switched off by enabledBy", async () => {
+    const payload = directivePayload({
+      files: [{ path: "ci.yaml", strategy: "full", source: "base/ci.yaml", enabledBy: "ci.deploy" }],
+      sources: { "base/ci.yaml": "# streamctl:end ci.deploy\n" },
+    });
+    expect((await caught(resolvePresetChain(payload, "base", "nuxt-4"))).details).toMatchObject({ reason: "unopened-end" });
   });
 });

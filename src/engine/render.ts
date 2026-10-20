@@ -45,7 +45,8 @@ function configStringList(config: StreamctlConfig | undefined, path: string): st
 
 // Space-joined values land in a single unquoted shell interpolation (e.g.
 // `apt-get install $APT_PACKAGES`), so any of these chars could inject commands.
-// A floor, independent of the payload's optional `pattern`.
+// A floor, independent of the payload's optional `pattern`. `comma` skips it: comma
+// lists target YAML flow sequences, not shell interpolation, so `pattern` is the guard.
 const SHELL_META_RE = /[\s;|&$`<>(){}\\'"*?[\]]/;
 
 /** A full `x.y.z` triple with an optional prerelease tail. */
@@ -77,20 +78,24 @@ function resolvePlaceholder(def: Placeholder, config: StreamctlConfig | undefine
   const raw = readConfigPath(config, def.configPath);
   if (Array.isArray(raw)) {
     const list = [...new Set(raw.filter((item): item is string => typeof item === "string"))].sort();
-    if (def.join !== "lines") {
-      // Reject metacharacters per item, before the join spaces get added.
-      for (const item of list) {
-        if (SHELL_META_RE.test(item)) {
-          throw new StreamctlError(
-            "CONFIG_INVALID",
-            `render placeholder "${key}" for "${filePath}" has a space-joined value ${JSON.stringify(item)} containing a shell metacharacter (whitespace or one of ; | & $ \` < > ( ) { } \\ ' " * ? [ ]).`,
-            { file: filePath, placeholder: key, value: item },
-          );
+    switch (def.join) {
+      case "lines":
+        return list.join("\n");
+      case "comma":
+        return list.join(", ");
+      default:
+        // Reject metacharacters per item, before the join spaces get added.
+        for (const item of list) {
+          if (SHELL_META_RE.test(item)) {
+            throw new StreamctlError(
+              "CONFIG_INVALID",
+              `render placeholder "${key}" for "${filePath}" has a space-joined value ${JSON.stringify(item)} containing a shell metacharacter (whitespace or one of ; | & $ \` < > ( ) { } \\ ' " * ? [ ]).`,
+              { file: filePath, placeholder: key, value: item },
+            );
+          }
         }
-      }
-      return list.join(" ");
+        return list.join(" ");
     }
-    return list.join("\n");
   }
   if (typeof raw === "string") {
     return raw;
@@ -203,11 +208,24 @@ export function renderFile(
 
   let output = `${parts.join("\n")}\n`;
 
-  // Values are resolved (and pattern-checked) once, ahead of substitution: they come from
-  // the config and the dependency map, never from the output being assembled.
+  // Values come from the config and the dependency map, never from the output being
+  // assembled. Only placeholders reachable from the assembled text (directly or through
+  // another value) are resolved and pattern-checked, so a token in a dropped directive
+  // block needs no valid value.
+  const defs = renderDef.placeholders ?? {};
   const values = new Map<string, string>();
   const omitTokens: string[] = [];
-  for (const [key, def] of Object.entries(renderDef.placeholders ?? {})) {
+  const pending = [...output.matchAll(LEFTOVER_TOKEN_RE)].map(match => match[1] ?? "");
+  const seen = new Set<string>();
+  for (let key = pending.shift(); key !== undefined; key = pending.shift()) {
+    if (seen.has(key) || !Object.hasOwn(defs, key)) {
+      continue;
+    }
+    const def = defs[key];
+    if (def === undefined) {
+      continue;
+    }
+    seen.add(key);
     const value = resolvePlaceholder(def, config, key, filePath, deps);
     if (def.pattern !== undefined && !new RegExp(def.pattern).test(value)) {
       throw new StreamctlError(
@@ -221,19 +239,20 @@ export function renderFile(
       continue;
     }
     values.set(key, value);
+    pending.push(...[...value.matchAll(LEFTOVER_TOKEN_RE)].map(match => match[1] ?? ""));
   }
 
   const passthrough = new Set(renderDef.passthrough ?? []);
 
-  // Callback form: a plain replacement string would honor `$&`/`$1` patterns in the value.
-  // Config values are data and must land verbatim.
-  const substitutePass = (text: string): string => {
-    let next = text;
-    for (const [key, value] of values) {
-      next = next.replaceAll(`\${${key}}`, () => value);
-    }
-    return next;
-  };
+  // Continuation lines get the line's leading whitespace, not the token's column. Nested
+  // tokens resolve on the next pass, so the output does not depend on placeholder order.
+  // Callback form: a replacement string would expand `$&`/`$1` inside config values.
+  const substitutePass = (text: string): string =>
+    text.split("\n").map((line) => {
+      const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
+      const replaced = line.replace(LEFTOVER_TOKEN_RE, (token: string, name: string) => values.get(name) ?? token);
+      return replaced.split("\n").map((part, index) => index === 0 || part === "" ? part : indent + part).join("\n");
+    }).join("\n");
 
   for (let pass = 1; ; pass++) {
     const next = substitutePass(output);

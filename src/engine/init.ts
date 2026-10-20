@@ -6,6 +6,7 @@ import type { SyncDecider, SyncPreview, SyncResult } from "./sync";
 import type { LatestVersionProbe, VersionExistsProbe } from "./versions";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { loadStreamctlConfig } from "../config/load";
 import { CONFIG_FILE, resolveConfigFile } from "../config/resolve";
 import { validateStreamctlConfigWithKeys } from "../config/validate";
 import { StreamctlError } from "../errors";
@@ -440,10 +441,20 @@ export async function runInit(opts: RunInitOptions): Promise<InitResult> {
     return { base, profile, version, cliVersion, sync: null };
   }
 
-  const config: StreamctlConfig = { package: opts.package, base, version, profile };
+  // Sync with the file just written, so wrapper defaults (toggles, `enabledBy`,
+  // directive conditions) match what a later `sync` renders. The bare fallback keeps
+  // init finishing when the config cannot be loaded (e.g. an import that fails).
+  let config: StreamctlConfig;
+  try {
+    config = (await loadStreamctlConfig(cwd, { logger })).config;
+  } catch (error) {
+    const reason = (error instanceof Error ? error.message : String(error)).split("\n")[0];
+    logger.warn(`could not load the scaffolded ${CONFIG_FILE}.ts; running the first sync with package, base, version and profile only. Reason: ${reason}`);
+    config = { package: opts.package, base, version, profile };
+  }
   const payload = await getPayload();
   const { files: managedFiles, baseline, configKeys } = await resolvePresetChain(payload, base, profile);
-  // Stage 2. The freshly-scaffolded config carries no knobs, so this is a guard.
+  // Stage 2 against the payload's configKeys.
   validateStreamctlConfigWithKeys(config, configKeys);
   const sync = await runSync({
     cwd,

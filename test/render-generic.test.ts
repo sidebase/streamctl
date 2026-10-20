@@ -99,6 +99,25 @@ describe("renderFile: placeholders", () => {
     const def: RenderDef = { placeholders: { ENVS: { configPath: "aptPackages", default: "", join: "lines" } } };
     expect(renderFile("${ENVS}\n", def, cfg({ aptPackages: ["A=1;2", "B=3"] }), {})).toBe("A=1;2\nB=3\n");
   });
+
+  it("comma-joins a deduped, sorted string[] for a YAML flow sequence", () => {
+    const def: RenderDef = { placeholders: { BRANCHES: { configPath: "aptPackages", default: "", join: "comma" } } };
+    expect(renderFile("branches: [${BRANCHES}]\n", def, cfg({ aptPackages: ["main", "dev", "main"] }), {})).toBe("branches: [dev, main]\n");
+  });
+
+  it("skips the shell-meta floor for comma-joined values but keeps it for space", () => {
+    const comma: RenderDef = { placeholders: { BRANCHES: { configPath: "aptPackages", default: "", join: "comma" } } };
+    expect(renderFile("branches: [${BRANCHES}]\n", comma, cfg({ aptPackages: ["release/*", "main"] }), {})).toBe("branches: [main, release/*]\n");
+
+    const space: RenderDef = { placeholders: { BRANCHES: { configPath: "aptPackages", default: "", join: "space" } } };
+    expect(() => renderFile("${BRANCHES}\n", space, cfg({ aptPackages: ["release/*"] }), {})).toThrow(/shell metacharacter/);
+  });
+
+  it("tests `pattern` against the whole comma-joined value", () => {
+    const def: RenderDef = { placeholders: { BRANCHES: { configPath: "aptPackages", default: "", join: "comma", pattern: "^[a-z]+(, [a-z]+)*$" } } };
+    expect(renderFile("[${BRANCHES}]\n", def, cfg({ aptPackages: ["main", "dev"] }), {})).toBe("[dev, main]\n");
+    expect(() => renderFile("[${BRANCHES}]\n", def, cfg({ aptPackages: ["main", "re]lease"] }), {})).toThrow(/has value "main, re\]lease", which violates its pattern/);
+  });
 });
 
 describe("renderFile: fromDependency", () => {
@@ -246,6 +265,74 @@ describe("renderFile: nested placeholder tokens", () => {
       },
     };
     expect(renderFile("v: ${OUTER}\n", def, cfg({ ci: { inner: "$& $1 $$" } }), {})).toBe("v: [$& $1 $$]\n");
+  });
+});
+
+describe("renderFile: indent-aware substitution", () => {
+  const script = (value: string): RenderDef => ({ placeholders: { SCRIPT: { configPath: "ci.script", default: value } } });
+
+  it("indents continuation lines like the token line", () => {
+    expect(renderFile("run: |\n    ${SCRIPT}\n", script("a\nb\nc"), cfg(), {})).toBe("run: |\n    a\n    b\n    c\n");
+  });
+
+  it("leaves empty continuation lines empty", () => {
+    expect(renderFile("  ${SCRIPT}\n", script("a\n\nb"), cfg(), {})).toBe("  a\n\n  b\n");
+  });
+
+  it("keeps a column-0 multiline value as-is", () => {
+    expect(renderFile("${SCRIPT}\nend\n", script("a\n  b\nc"), cfg(), {})).toBe("a\n  b\nc\nend\n");
+  });
+
+  it("leaves single-line values unchanged", () => {
+    expect(renderFile("  key: ${SCRIPT}\n", script("value"), cfg(), {})).toBe("  key: value\n");
+  });
+
+  it("uses the same indent for two tokens on one line", () => {
+    const def: RenderDef = { placeholders: { A: { configPath: "ci.a", default: "a1\na2" }, B: { configPath: "ci.b", default: "b1\nb2" } } };
+    expect(renderFile("  ${A} ${B}\n", def, cfg(), {})).toBe("  a1\n  a2 b1\n  b2\n");
+  });
+
+  it("indents nested multiline tokens independent of placeholder order", () => {
+    const a = { configPath: "ci.a", default: "x\n  ${B}" };
+    const b = { configPath: "ci.b", default: "b1\nb2" };
+    const expected = "  x\n    b1\n    b2\n";
+    expect(renderFile("  ${A}\n", { placeholders: { A: a, B: b } }, cfg(), {})).toBe(expected);
+    expect(renderFile("  ${A}\n", { placeholders: { B: b, A: a } }, cfg(), {})).toBe(expected);
+  });
+
+  it("indents content that follows a value ending in a newline", () => {
+    const def: RenderDef = { placeholders: { A: { configPath: "ci.a", default: "a\n" }, B: { configPath: "ci.b", default: "b" } } };
+    expect(renderFile("run: |\n  ${A}${B}\n", def, cfg(), {})).toBe("run: |\n  a\n  b\n");
+    expect(renderFile("  ${A}tail\n", def, cfg(), {})).toBe("  a\n  tail\n");
+  });
+
+  it("lands $& and $1 verbatim", () => {
+    expect(renderFile("  ${SCRIPT}\n", script("x $& y\n$1"), cfg(), {})).toBe("  x $& y\n  $1\n");
+  });
+
+  it("indents two multiline tokens on one line independent of placeholder order", () => {
+    const a = { configPath: "ci.a", default: "a1\n    a2" };
+    const b = { configPath: "ci.b", default: "b1\nb2" };
+    const expected = "  a1\n      a2 b1\n  b2\n";
+    expect(renderFile("  ${A} ${B}\n", { placeholders: { A: a, B: b } }, cfg(), {})).toBe(expected);
+    expect(renderFile("  ${A} ${B}\n", { placeholders: { B: b, A: a } }, cfg(), {})).toBe(expected);
+  });
+});
+
+describe("renderFile: unreachable placeholders", () => {
+  const def: RenderDef = { placeholders: { TARGET: { configPath: "ci.target", default: "", pattern: "^[a-z]+$" } } };
+
+  it("skips resolving and pattern-checking a placeholder whose token is absent", () => {
+    expect(renderFile("deploy: off\n", def, cfg(), {})).toBe("deploy: off\n");
+  });
+
+  it("still checks it once the token is present", () => {
+    expect(() => renderFile("target: ${TARGET}\n", def, cfg(), {})).toThrow(/violates its pattern/);
+  });
+
+  it("checks a placeholder reachable only through another value", () => {
+    const nested: RenderDef = { placeholders: { ...def.placeholders, CMD: { configPath: "ci.cmd", default: "deploy ${TARGET}" } } };
+    expect(() => renderFile("run: ${CMD}\n", nested, cfg(), {})).toThrow(/TARGET/);
   });
 });
 

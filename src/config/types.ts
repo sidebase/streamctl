@@ -34,6 +34,8 @@ export interface ManagedFile {
   renderDef?: RenderDef;
   /** Config boolean dot-path. Absent or `false` excludes the file, same as `files: off`. */
   enabledBy?: string;
+  /** Set by `resolvePresetChain` below schemaVersion 5: template and fragments skip the directive pass. */
+  skipDirectives?: boolean;
   /**
    * Marks a file the payload is newly taking over, so a pre-existing differing
    * `full` file is classified as an `adoption` conflict rather than an `edit`.

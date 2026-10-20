@@ -2,11 +2,14 @@ import type { ZodError } from "zod";
 import { describe, expect, it } from "vitest";
 import { CONFIG_FILE, LEGACY_CONFIG_FILE } from "../src/config/resolve";
 import {
+  COMMA_JOIN_MIN_SCHEMA_VERSION,
+  DIRECTIVES_MIN_SCHEMA_VERSION,
   managedFileSchema,
   payloadManifestSchema,
   presetManifestSchema,
   renderDefSchema,
   SUPPORTED_SCHEMA_VERSION,
+  SUPPORTED_SCHEMA_VERSION_LIST,
   SUPPORTED_SCHEMA_VERSIONS,
   zodToIssues,
 } from "../src/manifest/schema";
@@ -222,6 +225,10 @@ describe("RenderDef", () => {
     expect(renderDefSchema.safeParse({ fragments: [{ toggle: "ci.e2e", source: "a" }, { forEach: "ci.deploy", source: "b" }] }).success).toBe(true);
   });
 
+  it("accepts join: comma", () => {
+    expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", join: "comma" } } }).success).toBe(true);
+  });
+
   it("rejects an invalid placeholder join", () => {
     expect(renderDefSchema.safeParse({ placeholders: { X: { configPath: "a", default: "", join: "csv" } } }).success).toBe(false);
   });
@@ -292,14 +299,21 @@ describe("PayloadManifest schemaVersion contract", () => {
   // The exported constant is base-config's `validate-presets.mjs` contract: it writes this
   // value into new payloads, so it has to be the current one, not just a supported one.
   it("names the current version, which is supported", () => {
-    expect(SUPPORTED_SCHEMA_VERSION).toBe(4);
+    expect(SUPPORTED_SCHEMA_VERSION).toBe(5);
     expect(SUPPORTED_SCHEMA_VERSIONS.has(SUPPORTED_SCHEMA_VERSION)).toBe(true);
+  });
+
+  it("lists 2 through 5 and gates directives at 5", () => {
+    expect([...SUPPORTED_SCHEMA_VERSIONS].sort((a, b) => a - b)).toEqual([2, 3, 4, 5]);
+    expect(SUPPORTED_SCHEMA_VERSION_LIST).toBe("2, 3, 4, 5");
+    expect(DIRECTIVES_MIN_SCHEMA_VERSION).toBe(5);
+    expect(COMMA_JOIN_MIN_SCHEMA_VERSION).toBe(5);
   });
 
   // Plain refinement failure here; the loader is what turns it into SCHEMA_UNSUPPORTED.
   it("rejects anything older or newer", () => {
     expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 1 }).success).toBe(false);
-    expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 5 }).success).toBe(false);
+    expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 6 }).success).toBe(false);
     expect(payloadManifestSchema.safeParse({ ...payload(), schemaVersion: 2.5 }).success).toBe(false);
   });
 

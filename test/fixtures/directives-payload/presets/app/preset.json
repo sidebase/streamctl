@@ -1,0 +1,30 @@
+{
+  "name": "app",
+  "files": [
+    { "path": ".github/workflows/pipeline.yml", "strategy": "full", "source": "app/github/workflows/pipeline.yml", "render": "pipeline" },
+    { "path": "Containerfile", "strategy": "full", "source": "app/Containerfile" },
+    { "path": "NOTES.md", "strategy": "full", "source": "app/NOTES.md" }
+  ],
+  "renders": {
+    "pipeline": {
+      "placeholders": {
+        "DEPLOY_TARGET": { "configPath": "ci.deployTarget", "default": "staging", "pattern": "^[a-z-]+$" }
+      },
+      "fragments": [
+        { "toggle": "ci.lint", "source": "app/fragments/lint-job.yml" }
+      ]
+    }
+  },
+  "configKeys": {
+    "ci.cache": "boolean",
+    "ci.deploy": "boolean",
+    "ci.deployTarget": "string",
+    "ci.lint": "boolean",
+    "ci.strictLint": "boolean",
+    "ci.containerDebug": "boolean",
+    "ci.extendedDocs": "boolean"
+  },
+  "versionProfiles": {
+    "std": {}
+  }
+}

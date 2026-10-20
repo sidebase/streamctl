@@ -18,14 +18,14 @@ const LEGACY_CONFIG_DIR = ".streamctl";
  * name because base-config's `scripts/validate-presets.mjs` imports it from
  * `@sidebase/streamctl/manifest`. Manifest and package versions are otherwise independent.
  */
-export const SUPPORTED_SCHEMA_VERSION = 4;
+export const SUPPORTED_SCHEMA_VERSION = 5;
 
 /**
  * Every version this CLI accepts; anything else maps to `SCHEMA_UNSUPPORTED`. v2 payloads
  * keep working unchanged, v3 additionally allows placeholder `fromDependency`, v4
- * placeholder `omitLineIfEmpty`.
+ * placeholder `omitLineIfEmpty`, v5 template directives (`streamctl:if`/`else`/`end`).
  */
-export const SUPPORTED_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([2, 3, SUPPORTED_SCHEMA_VERSION]);
+export const SUPPORTED_SCHEMA_VERSIONS: ReadonlySet<number> = new Set([2, 3, 4, SUPPORTED_SCHEMA_VERSION]);
 
 /** Sorted rendering of {@link SUPPORTED_SCHEMA_VERSIONS} for error messages. */
 export const SUPPORTED_SCHEMA_VERSION_LIST = [...SUPPORTED_SCHEMA_VERSIONS].sort((a, b) => a - b).join(", ");
@@ -36,13 +36,21 @@ export const FROM_DEPENDENCY_MIN_SCHEMA_VERSION = 3;
 /** Lowest `schemaVersion` a payload may declare while using placeholder `omitLineIfEmpty`. */
 export const OMIT_LINE_MIN_SCHEMA_VERSION = 4;
 
+/** Lowest `schemaVersion` a payload may declare while using template directives (`streamctl:if`/`else`/`end`). */
+export const DIRECTIVES_MIN_SCHEMA_VERSION = 5;
+
+/** Lowest `schemaVersion` a payload may declare while using placeholder `join: "comma"`. */
+export const COMMA_JOIN_MIN_SCHEMA_VERSION = 5;
+
 /** The CLI checks shape only; semantics stay payload-owned. `"object"` is a presence + `typeof` check with no deep validation. */
 export const CONFIG_KEY_TYPES = ["boolean", "string", "string[]", "object"] as const;
 export type ConfigKeyType = (typeof CONFIG_KEY_TYPES)[number];
 
 /**
- * A `string[]` value is deduped + sorted, then joined per `join` (`space` or
- * `lines`). Substitution is single-pass; any leftover `${…}` fails render.ts's
+ * A `string[]` value is deduped + sorted, then joined per `join` (`space`, `lines` or
+ * `comma`; `comma` requires `schemaVersion` {@link COMMA_JOIN_MIN_SCHEMA_VERSION}).
+ * Substitution repeats until the text stops changing (at most 10 passes, so a
+ * self-referencing value fails); any leftover `${…}` then fails render.ts's
  * leftover-token check.
  *
  * `fromDependency` names an npm package whose pin in the consumer's package.json supplies
@@ -58,7 +66,7 @@ export const placeholderSchema = z.strictObject({
   fromDependency: z.string().min(1).optional(),
   default: z.string(),
   pattern: z.string().min(1).optional(),
-  join: z.enum(["space", "lines"]).optional(),
+  join: z.enum(["space", "lines", "comma"]).optional(),
   omitLineIfEmpty: z.boolean().optional(),
 });
 
