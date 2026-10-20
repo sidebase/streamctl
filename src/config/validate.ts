@@ -2,6 +2,7 @@ import type { ConfigKeyType } from "../manifest/schema";
 import type { StreamctlConfig } from "./types";
 import { z } from "zod";
 import { StreamctlError } from "../errors";
+import { matchesConfigKeyType } from "../manifest/schema";
 import { RECONCILABLE_KEY_PATTERN } from "./types";
 
 export interface ConfigIssue {
@@ -91,6 +92,28 @@ export function validateStreamctlConfig(input: unknown): StreamctlConfig {
   return asValidatedConfig(input);
 }
 
+function withDefault(target: Record<string, unknown>, segments: string[], value: unknown): Record<string, unknown> {
+  const [head, ...tail] = segments;
+  if (head === undefined) {
+    return target;
+  }
+  const current = target[head];
+  if (tail.length === 0) {
+    return current === undefined ? { ...target, [head]: value } : target;
+  }
+  const child = isPlainObject(current) ? current : current === undefined ? {} : undefined;
+  return child === undefined ? target : { ...target, [head]: withDefault(child, tail, value) };
+}
+
+/** Fills each `configKeys` default whose path the config leaves unset; set values (`false`, `""`, `[]` included) win. */
+export function applyConfigDefaults(config: StreamctlConfig, defaults: Record<string, unknown>): StreamctlConfig {
+  let result: Record<string, unknown> = { ...config };
+  for (const [path, value] of Object.entries(defaults)) {
+    result = withDefault(result, path.split("."), value);
+  }
+  return asValidatedConfig(result);
+}
+
 function describeType(value: unknown): string {
   if (value === null) {
     return "null";
@@ -99,20 +122,6 @@ function describeType(value: unknown): string {
     return "array";
   }
   return typeof value;
-}
-
-/** True when `value` satisfies the declared {@link ConfigKeyType} (object = shape-only). */
-function matchesType(value: unknown, type: ConfigKeyType): boolean {
-  switch (type) {
-    case "boolean":
-      return typeof value === "boolean";
-    case "string":
-      return typeof value === "string";
-    case "string[]":
-      return Array.isArray(value) && value.every(entry => typeof entry === "string");
-    case "object":
-      return isPlainObject(value);
-  }
 }
 
 /** Levenshtein edit distance (iterative single-row; no dependency). */
@@ -162,7 +171,7 @@ export function validateConfigKeys(rest: Record<string, unknown>, configKeys: Re
 
       if (isLeaf(path)) {
         const type = configKeys[path];
-        if (type !== undefined && !matchesType(value, type)) {
+        if (type !== undefined && !matchesConfigKeyType(value, type)) {
           issues.push({ path, message: `expected ${type}, got ${describeType(value)}` });
         }
         continue; // declared leaf, object included; never recurse (shape-only)

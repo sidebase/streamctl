@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadStreamctlConfig } from "../config/load";
 import { CONFIG_FILE, resolveConfigFile } from "../config/resolve";
-import { validateStreamctlConfigWithKeys } from "../config/validate";
+import { applyConfigDefaults, validateStreamctlConfigWithKeys } from "../config/validate";
 import { StreamctlError } from "../errors";
 import { stderrLogger } from "../logger";
 import { resolvePayload } from "../payload/resolve";
@@ -453,13 +453,13 @@ export async function runInit(opts: RunInitOptions): Promise<InitResult> {
     config = { package: opts.package, base, version, profile };
   }
   const payload = await getPayload();
-  const { files: managedFiles, baseline, configKeys } = await resolvePresetChain(payload, base, profile);
+  const { files: managedFiles, baseline, configKeys, configDefaults } = await resolvePresetChain(payload, base, profile);
   // Stage 2 against the payload's configKeys.
-  validateStreamctlConfigWithKeys(config, configKeys);
+  const effective = applyConfigDefaults(validateStreamctlConfigWithKeys(config, configKeys), configDefaults);
   const sync = await runSync({
     cwd,
     payload,
-    config,
+    config: effective,
     managedFiles,
     baseline,
     // init just wrote `streamctl.config.ts` and bumped `package.json` devDeps, so the

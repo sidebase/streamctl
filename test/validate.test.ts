@@ -1,6 +1,6 @@
 import type { ConfigKeyType } from "../src/manifest/schema";
 import { describe, expect, it } from "vitest";
-import { validateConfigKeys, validateStreamctlConfig, validateStreamctlConfigWithKeys } from "../src/config/validate";
+import { applyConfigDefaults, validateConfigKeys, validateStreamctlConfig, validateStreamctlConfigWithKeys } from "../src/config/validate";
 import { StreamctlError } from "../src/errors";
 
 const base = { package: "@acme/payload", base: "nuxt-app", version: "1.0.0", profile: "nuxt-4" } as const;
@@ -184,5 +184,24 @@ describe("validateStreamctlConfigWithKeys (combined stages)", () => {
   it("returns the validated config when everything matches", () => {
     const config = validateStreamctlConfigWithKeys({ ...base, ci: { unitTests: true }, aptPackages: ["curl"] }, CONFIG_KEYS);
     expect(config.profile).toBe("nuxt-4");
+  });
+});
+
+describe("applyConfigDefaults", () => {
+  const defaults = { "features.prisma": true, "ci.branches": ["main"] };
+
+  it("fills unset paths, creating parent objects", () => {
+    expect(applyConfigDefaults({ ...base }, defaults)).toEqual({ ...base, features: { prisma: true }, ci: { branches: ["main"] } });
+  });
+
+  it("keeps values the config sets, false and [] included", () => {
+    const config = { ...base, features: { prisma: false }, ci: { branches: [] } };
+    expect(applyConfigDefaults(config, defaults)).toEqual(config);
+  });
+
+  it("does not mutate the input", () => {
+    const config = { ...base, ci: { e2e: true } };
+    applyConfigDefaults(config, defaults);
+    expect(config).toEqual({ ...base, ci: { e2e: true } });
   });
 });
