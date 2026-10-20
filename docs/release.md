@@ -70,30 +70,11 @@ anything that moves that envelope, the exit codes, or `schemaVersion`.
 
 Generated notes only cover commit subjects, so add these by hand.
 
-- **Manifest schemaVersion 5: template directives.** Templates and fragments can
-  wrap lines in `streamctl:if <cond>` / `streamctl:else <cond>` /
-  `streamctl:end <cond>` comments; inactive branches and all directive lines are
-  removed at render. See [template directives](reference.md#template-directives).
-- **Placeholder `join: "comma"`** (schemaVersion 5): a `string[]` knob renders as
-  `a, b, c`, e.g. for YAML flow sequences like `branches: [${BRANCHES}]`. No
-  shell-metacharacter check in this mode; use the placeholder `pattern`. Gate
-  constant `COMMA_JOIN_MIN_SCHEMA_VERSION` is exported from `./manifest`.
-- `scanDirectives`, `commentSyntaxFor` and `DIRECTIVES_MIN_SCHEMA_VERSION` are
-  exported from `@sidebase/streamctl/manifest`; `SUPPORTED_SCHEMA_VERSION` is now 5.
-- Chain resolution now reads and scans every template and fragment source,
-  including files that are `off` or disabled by `enabledBy`. A payload missing a
-  template source therefore fails every command up front, not only when the file
-  is active.
-- `init` loads the `streamctl.config.ts` it just scaffolded and runs the first sync
-  with it, so payload wrapper defaults apply right away. If the file cannot be
-  loaded, `init` prints a one-line warning and falls back to package, base,
-  version and profile only, as before.
-- Indent-aware substitution: continuation lines of a multiline placeholder value
-  get the token line's indentation. Not gated; tokens at column 0 render as before.
-- Placeholders are resolved and pattern-checked only when their token is reachable
-  from the rendered text, directly or through another placeholder's value. A
-  declared placeholder whose token is unused (or sits in a dropped directive block)
-  no longer fails the render.
-- v2 to v4 payloads parse unchanged, including comments that start with
-  `streamctl:`; directives need `schemaVersion: 5` and this CLI or newer.
-- Minor bump: new schema version, no removals.
+- **`configKeys` defaults** (schemaVersion 5): an entry can be
+  `{ "type": "boolean", "default": true }`. An unset config path then takes the
+  default in directive conditions, `enabledBy` and placeholders. `upgrade` already
+  renders with the defaults of the payload it installs. See
+  [config key defaults](reference.md#config-key-defaults).
+- Payloads that use defaults need CLI 0.5.1 or newer in every consumer; 0.5.0
+  rejects the object form when loading the preset.
+- Patch bump: no schema version change, no removals.

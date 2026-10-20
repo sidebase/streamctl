@@ -207,7 +207,7 @@ steps:
 ```
 
 - `if`, optional `else`, and `end` all name the same condition; `!` negates it. No nesting.
-- A condition is a config path declared in some preset's `configKeys`; `true`, a non-empty string or a non-empty array is true.
+- A condition is a config path declared in some preset's `configKeys`; `true`, a non-empty string or a non-empty array is true. An unset path is false unless its `configKeys` entry has a [default](docs/reference.md#config-key-defaults).
 - Directive lines are always removed; the inactive branch is removed with them.
 - `if`/`else`/`end` share one indentation; JSON files and `merge` files reject directives.
 - Needs manifest `schemaVersion: 5`. Every mistake fails with `CONFIG_INVALID`, naming the file (and line).

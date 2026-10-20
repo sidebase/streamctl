@@ -133,6 +133,23 @@ Per-file `state` in `streamctl status` is one of:
 
 The `--json` `data` is `{ files: { path, state, strategy }[], payload: { package, pinned, installed, latest? }, profile, cliVersion, lockfileStale }`.
 
+## Config key defaults
+
+A `configKeys` entry is either the bare type or `{ "type": ..., "default": ... }`:
+
+```json
+"configKeys": {
+  "features.prisma": { "type": "boolean", "default": true },
+  "ci.lint": "boolean"
+}
+```
+
+- When the consumer config leaves the path unset, the default is used everywhere the config is read: directive conditions, `enabledBy` and placeholders. A value the config sets wins, `false`, `""` and `[]` included.
+- The default must match `type`. `object` keys take no default.
+- A child preset overrides a parent's default; redeclaring the key with the bare type removes it.
+- Needs manifest `schemaVersion: 5` and CLI 0.5.1 or newer. CLI 0.5.0 rejects the object form when loading the preset.
+- `upgrade` renders with the defaults of the payload it installs. Defaults set in the payload's config wrapper (the function `streamctl.config.ts` calls) do not reach that run: the config is evaluated before the install, with the wrapper version that was installed before. Use `configKeys` defaults for anything the upgrade sync must already see.
+
 ## Template directives
 
 Payload templates and fragments can mark runs of whole lines as conditional. Requires manifest `schemaVersion: 5` (`DIRECTIVES_MIN_SCHEMA_VERSION`). Below schemaVersion 5, `streamctl:` comments are plain content; only a well-formed `if`/`else`/`end` line is detected, to raise the `schema-version` error.
@@ -182,7 +199,7 @@ The condition must be declared in the merged `configKeys`, either exactly or und
 | `true` | true |
 | non-empty string | true |
 | array with at least one element | true |
-| absent, `false`, `""`, `[]` | false |
+| absent (and no [default](#config-key-defaults)), `false`, `""`, `[]` | false |
 | number, object, `null` | `CONFIG_INVALID` (`unevaluable-value`) |
 
 ### Placement rules
