@@ -77,4 +77,7 @@ Generated notes only cover commit subjects, so add these by hand.
   [config key defaults](reference.md#config-key-defaults).
 - Payloads that use defaults need CLI 0.5.1 or newer in every consumer; 0.5.0
   rejects the object form when loading the preset.
+- Code that parses presets with the exported `presetManifestSchema` now sees
+  `configKeys` values that are either a type string or `{ type, default }`; read
+  the type with `typeof entry === "string" ? entry : entry.type`.
 - Patch bump: no schema version change, no removals.
