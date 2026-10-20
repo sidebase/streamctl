@@ -1136,7 +1136,8 @@ describe("runUpgrade: configKeys defaults", () => {
   });
 
   it("previews the defaulted block on --dry-run", async () => {
-    const result = await runUpgrade(baseOpts({ dryRun: true }));
-    expect(result.plan).toContainEqual(expect.objectContaining({ path: "ci.yaml" }));
+    const proposed = new Map<string, string>();
+    await runUpgrade(baseOpts({ dryRun: true, onPreview: change => proposed.set(change.path, change.after) }));
+    expect(proposed.get("ci.yaml")).toBe("steps:\n  - run: prisma generate\n");
   });
 });
