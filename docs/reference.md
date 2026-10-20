@@ -193,7 +193,7 @@ The condition must be declared in the merged `configKeys`, either exactly or und
 
 ### Reserved namespace
 
-`streamctl:` right after a comment token is reserved. Prose like `# streamctl: the CLI` is an `unknown-directive` error. The verbs `each`, `insert` and `raw` are reserved for a future version and fail the same way with a hint.
+From `schemaVersion: 5`, `streamctl:` right after a comment token is reserved. Prose like `# streamctl: the CLI` is an `unknown-directive` error. The verbs `each`, `insert` and `raw` are reserved for a future version and fail the same way with a hint.
 
 ### Errors
 

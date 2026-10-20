@@ -93,8 +93,7 @@ Generated notes only cover commit subjects, so add these by hand.
 - Placeholders are resolved and pattern-checked only when their token is reachable
   from the rendered text, directly or through another placeholder's value. A
   declared placeholder whose token is unused (or sits in a dropped directive block)
-  no longer fails the render. Nested values resolve one level per substitution pass;
-  the 10-pass cap is unchanged.
+  no longer fails the render.
 - v2 to v4 payloads parse unchanged, including comments that start with
   `streamctl:`; directives need `schemaVersion: 5` and this CLI or newer.
 - Minor bump: new schema version, no removals.

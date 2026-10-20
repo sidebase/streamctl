@@ -244,12 +244,9 @@ export function renderFile(
 
   const passthrough = new Set(renderDef.passthrough ?? []);
 
-  // All tokens of a line are replaced in one go against that line's leading whitespace (not
-  // the token's column), so continuation lines of a multiline value line up and empty ones
-  // stay empty. Inserted values are not rescanned within the pass: nested tokens resolve on
-  // the next pass against the line they landed on, which keeps the output independent of
-  // placeholder declaration order. Callback form: a plain replacement string would honor
-  // `$&`/`$1` patterns in the value; config values are data and must land verbatim.
+  // Continuation lines get the line's leading whitespace, not the token's column. Nested
+  // tokens resolve on the next pass, so the output does not depend on placeholder order.
+  // Callback form: a replacement string would expand `$&`/`$1` inside config values.
   const substitutePass = (text: string): string =>
     text.split("\n").map((line) => {
       const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
