@@ -1117,3 +1117,27 @@ describe("runUpgrade: legacy config location", () => {
     expect(details.recover).toContain(legacyRel);
   });
 });
+
+describe("runUpgrade: configKeys defaults", () => {
+  // The target payload introduces a block gated on a defaulted key that no repo config sets yet.
+  beforeEach(async () => {
+    await writeFile(join(configPkg, "presets", "manifest.json"), JSON.stringify({ schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" }));
+    await writeFile(join(configPkg, "presets", "base", "preset.json"), JSON.stringify({
+      name: "base",
+      files: [{ path: "ci.yaml", strategy: "full", source: "base/ci.yaml" }],
+      configKeys: { "features.prisma": { type: "boolean", default: true } },
+    }));
+    await writeFile(join(configPkg, "presets", "base", "ci.yaml"), "steps:\n  # streamctl:if features.prisma\n  - run: prisma generate\n  # streamctl:end features.prisma\n");
+  });
+
+  it("renders the defaulted block on the upgrade run itself", async () => {
+    await runUpgrade(baseOpts());
+    expect(await readFile(join(repo, "ci.yaml"), "utf8")).toBe("steps:\n  - run: prisma generate\n");
+  });
+
+  it("previews the defaulted block on --dry-run", async () => {
+    const proposed = new Map<string, string>();
+    await runUpgrade(baseOpts({ dryRun: true, onPreview: change => proposed.set(change.path, change.after) }));
+    expect(proposed.get("ci.yaml")).toBe("steps:\n  - run: prisma generate\n");
+  });
+});

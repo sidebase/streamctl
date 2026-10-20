@@ -3,7 +3,7 @@ import type { Logger } from "../logger";
 import type { PayloadHandle } from "../payload/resolve";
 import type { DriftKind } from "./drift";
 import type { LatestVersionProbe } from "./versions";
-import { validateStreamctlConfigWithKeys } from "../config/validate";
+import { applyConfigDefaults, validateStreamctlConfigWithKeys } from "../config/validate";
 import { StreamctlError } from "../errors";
 import { stderrLogger } from "../logger";
 import { warnProfileMismatch } from "./detect";
@@ -53,14 +53,14 @@ export interface RunCheckOptions {
 export async function runCheck(
   cwd: string,
   payload: PayloadHandle,
-  config: StreamctlConfig,
+  userConfig: StreamctlConfig,
   failOn: FailOn = "drift",
   opts: RunCheckOptions = {},
 ): Promise<CheckResult> {
-  await warnProfileMismatch(cwd, payload, config.profile, opts.logger ?? stderrLogger);
+  await warnProfileMismatch(cwd, payload, userConfig.profile, opts.logger ?? stderrLogger);
 
-  const { files: managedFiles, baseline, configKeys } = await resolvePresetChain(payload, config.base, config.profile);
-  validateStreamctlConfigWithKeys(config, configKeys);
+  const { files: managedFiles, baseline, configKeys, configDefaults } = await resolvePresetChain(payload, userConfig.base, userConfig.profile);
+  const config = applyConfigDefaults(validateStreamctlConfigWithKeys(userConfig, configKeys), configDefaults);
   const report = await detectDrift(managedFiles, payload, config, cwd);
 
   const hasEslintConfig = managedFiles.some(file => file.path.endsWith("eslint.config.ts") && isFileActive(file, config));

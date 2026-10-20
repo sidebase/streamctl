@@ -284,6 +284,20 @@ describe("PresetManifest", () => {
     expect(presetManifestSchema.safeParse({ ...preset(), configKeys: { eslint: "number" } }).success).toBe(false);
   });
 
+  it("accepts a configKeys entry with a matching default", () => {
+    const configKeys = { "features.prisma": { type: "boolean", default: true }, "ci.branches": { type: "string[]", default: ["main"] } };
+    expect(presetManifestSchema.safeParse({ ...preset(), configKeys }).success).toBe(true);
+  });
+
+  it.each([
+    [{ type: "boolean", default: "yes" }],
+    [{ type: "string[]", default: [1] }],
+    [{ type: "object", default: {} }],
+    [{ type: "boolean" }],
+  ])("rejects the configKeys entry %j", (entry) => {
+    expect(presetManifestSchema.safeParse({ ...preset(), configKeys: { key: entry } }).success).toBe(false);
+  });
+
   it("rejects the old v1 shape with its packages/description keys", () => {
     expect(presetManifestSchema.safeParse({ ...preset(), packages: ["@x/y"], description: "d" }).success).toBe(false);
   });

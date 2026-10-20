@@ -9,7 +9,7 @@ import type { LatestVersionProbe, VersionExistsProbe } from "./versions";
 import { rm } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { loadStreamctlConfig } from "../config/load";
-import { validateStreamctlConfigWithKeys } from "../config/validate";
+import { applyConfigDefaults, validateStreamctlConfigWithKeys } from "../config/validate";
 import { StreamctlError } from "../errors";
 import { resolvePayload } from "../payload/resolve";
 import { dirtyTrackedPaths } from "./git";
@@ -304,8 +304,8 @@ async function validateConfigKnobs(opts: RunUpgradeOptions, config: StreamctlCon
 async function previewSync(opts: RunUpgradeOptions, config: StreamctlConfig, onPreview: SyncPreview): Promise<SyncResult | null> {
   try {
     const payload = await resolvePayload(opts.cwd, config.package, config.version, { resolvePackageDir: opts.resolvePackageDir });
-    const { files: managedFiles, baseline } = await resolvePresetChain(payload, config.base, config.profile);
-    return await runSync({ cwd: opts.cwd, payload, config, managedFiles, baseline, dryRun: true, onPreview, logger: opts.logger });
+    const { files: managedFiles, baseline, configDefaults } = await resolvePresetChain(payload, config.base, config.profile);
+    return await runSync({ cwd: opts.cwd, payload, config: applyConfigDefaults(config, configDefaults), managedFiles, baseline, dryRun: true, onPreview, logger: opts.logger });
   } catch (error) {
     if (error instanceof StreamctlError && (error.code === "CONFIG_VERSION_MISMATCH" || error.code === "CONFIG_PKG_MISSING")) {
       return null;
@@ -508,11 +508,11 @@ export async function runUpgrade(opts: RunUpgradeOptions): Promise<UpgradeResult
     installed = true;
 
     const payload = await resolvePayload(cwd, newConfig.package, toVersion, { resolvePackageDir: opts.resolvePackageDir });
-    const { files: managedFiles, baseline } = await resolvePresetChain(payload, newConfig.base, newConfig.profile);
+    const { files: managedFiles, baseline, configDefaults } = await resolvePresetChain(payload, newConfig.base, newConfig.profile);
     const sync = await runSync({
       cwd,
       payload,
-      config: newConfig,
+      config: applyConfigDefaults(newConfig, configDefaults),
       managedFiles,
       baseline,
       yes: opts.yes,

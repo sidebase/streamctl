@@ -579,3 +579,36 @@ describe("chain-time directive validation", () => {
     expect((await caught(resolvePresetChain(payload, "base", "nuxt-4"))).details).toMatchObject({ reason: "unopened-end" });
   });
 });
+
+describe("configKeys defaults", () => {
+  function withDefaults(schemaVersion: number, child: Record<string, unknown> = {}): PayloadHandle {
+    return payloadOf({
+      "manifest.json": { schemaVersion, presets: ["base", "app"], profiles: [], defaultBase: "app" },
+      "base/preset.json": {
+        name: "base",
+        files: [{ path: ".editorconfig", strategy: "full", source: "base/editorconfig" }],
+        configKeys: { "features.prisma": { type: "boolean", default: true }, "features.redis": { type: "boolean", default: false } },
+      },
+      "app/preset.json": { name: "app", extends: ["base"], files: [], configKeys: child },
+    });
+  }
+
+  it("returns the merged defaults next to the plain key types", async () => {
+    const { configKeys, configDefaults } = await resolvePresetChain(withDefaults(5), "app", "std");
+    expect(configKeys).toMatchObject({ "features.prisma": "boolean", "features.redis": "boolean" });
+    expect(configDefaults).toEqual({ "features.prisma": true, "features.redis": false });
+  });
+
+  it("lets a child override a default or drop it by redeclaring the bare type", async () => {
+    const child = { "features.prisma": { type: "boolean", default: false }, "features.redis": "boolean" };
+    const { configDefaults } = await resolvePresetChain(withDefaults(5, child), "app", "std");
+    expect(configDefaults).toEqual({ "features.prisma": false });
+  });
+
+  it("refuses a default under a v4 payload", async () => {
+    const error = await caught(resolvePresetChain(withDefaults(4), "app", "std"));
+    expect(error.code).toBe("CONFIG_INVALID");
+    expect(error.message).toContain(`configKeys "features.prisma" has a default, which requires schemaVersion 5`);
+    expect(error.details).toMatchObject({ file: "presets/base/preset.json", configKey: "features.prisma", found: 4, required: 5 });
+  });
+});

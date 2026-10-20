@@ -1,7 +1,7 @@
 import type { SyncChange, SyncDecider, SyncPreview } from "../engine/sync";
 import { defineCommand } from "citty";
 import { loadStreamctlConfig } from "../config/load";
-import { validateStreamctlConfigWithKeys } from "../config/validate";
+import { applyConfigDefaults, validateStreamctlConfigWithKeys } from "../config/validate";
 import { warnProfileMismatch } from "../engine/detect";
 import { renderDiff } from "../engine/diff";
 import { resolvePresetChain } from "../engine/manifest";
@@ -40,13 +40,13 @@ export const syncCommand = defineCommand({
       rejectEmptyFlags(args);
       const cwd = process.cwd();
       const { config: loaded } = await loadStreamctlConfig(cwd, { logger: reporter });
-      const config = options.versionSync ? loaded : { ...loaded, versionSync: false };
-      const payload = await resolvePayload(cwd, config.package, config.version);
-      await warnProfileMismatch(cwd, payload, config.profile, reporter);
-      const { files: managedFiles, baseline, configKeys } = await resolvePresetChain(payload, config.base, config.profile);
+      const userConfig = options.versionSync ? loaded : { ...loaded, versionSync: false };
+      const payload = await resolvePayload(cwd, userConfig.package, userConfig.version);
+      await warnProfileMismatch(cwd, payload, userConfig.profile, reporter);
+      const { files: managedFiles, baseline, configKeys, configDefaults } = await resolvePresetChain(payload, userConfig.base, userConfig.profile);
       // Stage 2: validate payload-declared config knobs against the merged
       // configKeys; a payload without configKeys makes this a no-op.
-      validateStreamctlConfigWithKeys(config, configKeys);
+      const config = applyConfigDefaults(validateStreamctlConfigWithKeys(userConfig, configKeys), configDefaults);
 
       // Prompt only on a real TTY; otherwise (CI / piped) degrade to a deterministic,
       // greppable plan printed to stderr while applying the headless policy.

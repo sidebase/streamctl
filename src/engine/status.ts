@@ -3,7 +3,7 @@ import type { Logger } from "../logger";
 import type { PayloadHandle } from "../payload/resolve";
 import type { LatestVersionProbe } from "./versions";
 import { join } from "node:path";
-import { validateStreamctlConfigWithKeys } from "../config/validate";
+import { applyConfigDefaults, validateStreamctlConfigWithKeys } from "../config/validate";
 import { stderrLogger } from "../logger";
 import { compose } from "./compose";
 import { contentEquals } from "./jsonc";
@@ -95,13 +95,13 @@ async function fileState(file: ManagedFile, payload: PayloadHandle, config: Stre
 export async function runStatus(
   cwd: string,
   payload: PayloadHandle,
-  config: StreamctlConfig,
+  userConfig: StreamctlConfig,
   opts: RunStatusOptions,
 ): Promise<StatusResult> {
   const logger = opts.logger ?? stderrLogger;
-  const { files: managedFiles, baseline, configKeys } = await resolvePresetChain(payload, config.base, config.profile);
+  const { files: managedFiles, baseline, configKeys, configDefaults } = await resolvePresetChain(payload, userConfig.base, userConfig.profile);
   // Stage 2: a malformed config here is a hard exit-1.
-  validateStreamctlConfigWithKeys(config, configKeys);
+  const config = applyConfigDefaults(validateStreamctlConfigWithKeys(userConfig, configKeys), configDefaults);
 
   // Read once per run, so `status` composes the same bytes `sync`/`check` do.
   const deps = dependencyMap(await readPackageJson(cwd));

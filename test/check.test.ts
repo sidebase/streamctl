@@ -214,3 +214,40 @@ describe("runCheck lockfileStale flag", () => {
     expect(details.lockfileStale).toBeFalsy();
   });
 });
+
+/** A v5 payload whose CI template gates a line on `features.prisma`, default on. */
+const defaultsPayload: PayloadHandle = {
+  version: "2.0.0",
+  async read(source) {
+    const entries: Record<string, string> = {
+      "manifest.json": JSON.stringify({ schemaVersion: 5, presets: ["base"], profiles: [], defaultBase: "base" }),
+      "base/preset.json": JSON.stringify({
+        name: "base",
+        files: [{ path: "ci.yaml", strategy: "full", source: "base/ci.yaml" }],
+        configKeys: { "features.prisma": { type: "boolean", default: true } },
+      }),
+      "base/ci.yaml": "steps:\n  # streamctl:if features.prisma\n  - run: prisma generate\n  # streamctl:end features.prisma\n  - run: lint\n",
+    };
+    const content = entries[source];
+    if (content === undefined) {
+      throw new Error(`missing fixture source: ${source}`);
+    }
+    return content;
+  },
+  async list() {
+    return ["manifest.json", "base/preset.json", "base/ci.yaml"];
+  },
+};
+
+describe("runCheck configKeys defaults", () => {
+  it("renders a block gated on a defaulted key the config leaves unset", async () => {
+    await writeFile(join(cwd, "ci.yaml"), "steps:\n  - run: prisma generate\n  - run: lint\n");
+    expect((await runCheck(cwd, defaultsPayload, config)).inSync).toBe(true);
+  });
+
+  it("lets the config switch the default off", async () => {
+    await writeFile(join(cwd, "ci.yaml"), "steps:\n  - run: lint\n");
+    const off = { ...config, features: { prisma: false } };
+    expect((await runCheck(cwd, defaultsPayload, off)).inSync).toBe(true);
+  });
+});
