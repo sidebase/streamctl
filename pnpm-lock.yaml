@@ -83,6 +83,8 @@ importers:
         specifier: ^5.0.3
         version: 5.0.3(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.1))
 
+  test/fixtures/directives-payload: {}
+
   test/fixtures/synthetic-payload: {}
 
   test/fixtures/uninitialized: {}
